@@ -1,0 +1,95 @@
+/* ====== Fondo principal ====== */
+body {
+  margin: 0;
+  font-family: "Poppins", sans-serif;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(135deg, #ffffff 0%, #1aa7ed 30%, #2b31e0 70%, #5e2be0 100%);
+  background-size: 200% 200%;
+  animation: gradientFlow 12s ease infinite;
+}
+
+@keyframes gradientFlow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* ====== Tarjeta ====== */
+.card {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 25px;
+  padding: 50px;
+  text-align: center;
+  color: #1e1e1e;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  max-width: 520px;
+  animation: fadeIn 1.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ====== Texto ====== */
+.title {
+  font-size: 2.8rem;
+  font-weight: 700;
+  color: #2b31e0;
+  margin-bottom: 10px;
+}
+
+.subtitle {
+  color: #2b6ae0;
+  font-weight: 500;
+  font-size: 1rem;
+  margin-bottom: 25px;
+  letter-spacing: 0.5px;
+}
+
+.description {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #444;
+  margin-bottom: 30px;
+}
+
+/* ====== Botón ====== */
+.btn {
+  background: linear-gradient(90deg, #2b6ae0, #2bdde0);
+  color: white;
+  border: none;
+  padding: 14px 32px;
+  border-radius: 40px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+.btn:hover {
+  background: linear-gradient(90deg, #1aa7ed, #2bdde0);
+  transform: scale(1.05);
+}
+
+/* ====== Responsivo ====== */
+@media (max-width: 600px) {
+  .card {
+    margin: 20px;
+    padding: 35px 25px;
+  }
+
+  .title {
+    font-size: 2.2rem;
+  }
+
+  .btn {
+    padding: 12px 26px;
+    font-size: 0.9rem;
+  }
+}
