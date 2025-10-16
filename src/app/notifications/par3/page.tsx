@@ -2,8 +2,9 @@
 
 import { useState, useEffect, ChangeEvent } from "react";
 import { FaUserCog, FaPencilAlt, FaCheck, FaHistory, FaArrowLeft } from "react-icons/fa";
-import { Fixer, ClientData, initialFixerState, initialClientState, HistoryItemProps } from './types';
-import { parseSolicitud, API_CONFIG } from './utils';
+import { useRouter } from 'next/navigation';
+import { Fixer, ClientData, initialFixerState, initialClientState } from './types';
+import { API_CONFIG } from './utils';
 import HistoryItem from './components/HistoryItem';
 
 // Interface para los logs locales
@@ -17,49 +18,17 @@ interface LocalLog {
 }
 
 export default function Par3Page() {
+  const router = useRouter();
   const [fixer, setFixer] = useState<Fixer>(initialFixerState);
   const [editando, setEditando] = useState<keyof Fixer | null>(null);
   const [resultado, setResultado] = useState<string>("");
-  const [logHistory, setLogHistory] = useState<string[]>([]);
-  const [isLoadingLog, setIsLoadingLog] = useState<boolean>(false);
-  const [logError, setLogError] = useState<string>("");
   const [clientData, setClientData] = useState<ClientData>(initialClientState);
   const [localLogs, setLocalLogs] = useState<LocalLog[]>([]);
+  const [logMessage, setLogMessage] = useState<string>("");
 
-  // LÓGICA PARA RECUPERAR EL LOG DEL BACKEND SEPARADO
-  const fetchLogHistory = async () => {
-    setIsLoadingLog(true);
-    setLogError("");
-    try {
-      const response = await fetch("https://servineo-backend.onrender.com/api/par3/historial");
-      if (response.ok) {
-        const data = await response.json();
-        if (Array.isArray(data.parsedLog)) {
-          setLogHistory(data.parsedLog);
-        } else if (Array.isArray(data)) {
-          setLogHistory(data);
-        } else if (Array.isArray(data.log)) {
-          setLogHistory(data.log);
-        } else {
-          setLogHistory([]);
-        }
-      } else {
-        setLogError("No se pudo cargar el historial. Backend no disponible.");
-        setLogHistory([]);
-      }
-    } catch (error) {
-      setLogError("Error de conexión con el backend.");
-      setLogHistory([]);
-    } finally {
-      setIsLoadingLog(false);
-    }
-  };
-
+  // Cargar logs locales desde localStorage al iniciar
   useEffect(() => {
-    fetchLogHistory();
-    
-    // Cargar logs locales desde localStorage al iniciar
-    const savedLogs = localStorage.getItem('servineo-local-logs');
+    const savedLogs = localStorage.getItem('servineo-par3-local-logs');
     if (savedLogs) {
       setLocalLogs(JSON.parse(savedLogs));
     }
@@ -68,7 +37,7 @@ export default function Par3Page() {
   // Guardar logs en localStorage cuando cambien
   useEffect(() => {
     if (localLogs.length > 0) {
-      localStorage.setItem('servineo-local-logs', JSON.stringify(localLogs));
+      localStorage.setItem('servineo-par3-local-logs', JSON.stringify(localLogs));
     }
   }, [localLogs]);
 
@@ -106,7 +75,7 @@ export default function Par3Page() {
       timestamp: Date.now()
     };
 
-    setLocalLogs(prev => [nuevoLog, ...prev].slice(0, 10)); // Mantener solo los últimos 10 logs
+    setLocalLogs(prev => [nuevoLog, ...prev].slice(0, 10));
   };
 
   const enviarNotificacion = async () => {
@@ -115,20 +84,33 @@ export default function Par3Page() {
     
     const URL_RESPUESTA = "https://tuapp.com/responder-solicitud";
 
+    // Validaciones
     if (!fixerTelefono || fixerTelefono.trim() === "") {
-      setResultado("❌ Error: El campo 'Número Destino' del Fixer es obligatorio y no puede estar vacío.");
+      setResultado("❌ Error: El campo 'Número Destino' del Fixer es obligatorio");
       setTimeout(() => setResultado(""), 4000);
       return;
     }
 
-    // Agregar log local inmediatamente (estado "Enviado")
-    agregarLogLocal("Enviado", `Solicitud enviada a ${fixerNombre}`);
+    if (!telefonoCliente || telefonoCliente.trim() === "") {
+      setResultado("❌ Error: El teléfono del cliente es obligatorio");
+      setTimeout(() => setResultado(""), 4000);
+      return;
+    }
+
+    if (!descripcion || descripcion.trim() === "") {
+      setResultado("❌ Error: La descripción del servicio es obligatoria");
+      setTimeout(() => setResultado(""), 4000);
+      return;
+    }
+
+    // Agregar log local inmediatamente
+    agregarLogLocal("Enviando", `Solicitud: ${descripcion.substring(0, 30)}...`);
 
     const texto = `¡Hola ${fixerNombre}, el ${fixerProfesion}!
 Nueva solicitud de servicio.
 Cliente: ${nombreCliente || "Cliente sin nombre"}
-Teléfono del Cliente: ${telefonoCliente || "N/A"} 
-Descripción: "${descripcion || "Servicio no especificado"}"
+Teléfono del Cliente: ${telefonoCliente} 
+Descripción: "${descripcion}"
 Enlace para responder: ${URL_RESPUESTA}
 Por favor, revisa y responde lo antes posible.`;
 
@@ -155,98 +137,56 @@ Por favor, revisa y responde lo antes posible.`;
       if (respuesta.ok) {
         setResultado("✅ Notificación enviada correctamente al Fixer: " + fixerTelefono);
         
-        // Actualizar el log local a "Completado"
+        // Actualizar log local a exitoso
         setLocalLogs(prev => 
-          prev.map(log => 
-            log.id === prev[0].id 
-              ? { ...log, status: "Completado", title: descripcion || "Servicio completado" }
+          prev.map((log, index) => 
+            index === 0 
+              ? { ...log, status: "Completado", title: descripcion }
               : log
           )
         );
         
-        fetchLogHistory();
+        // Limpiar formulario
+        setClientData(initialClientState);
+        
       } else {
-        const status = respuesta.status;
-        let errorMessage = `Error ${status}. Fallo al comunicarse con la API.`;
-        try {
-          const errorDetails = await respuesta.json();
-          if (errorDetails.message) {
-            errorMessage = errorDetails.message;
-          }
-        } catch (e) {
-          errorMessage = `Error ${status}. Respuesta de API ilegible.`;
-        }
+        const errorText = await respuesta.text();
+        console.error("Error response:", errorText);
         
-        // Actualizar el log local a "Fallido"
         setLocalLogs(prev => 
-          prev.map(log => 
-            log.id === prev[0].id 
-              ? { ...log, status: "Fallido", title: "Error en envío de solicitud" }
+          prev.map((log, index) => 
+            index === 0 
+              ? { ...log, status: "Fallido" }
               : log
           )
         );
         
-        setResultado(`❌ ${errorMessage}`);
+        setResultado(`❌ Error ${respuesta.status}: No se pudo enviar la notificación`);
       }
     } catch (error) {
-      console.error("Error en la petición a la API:", error);
+      console.error("Error en la petición:", error);
       
-      // Actualizar el log local a "Fallido"
       setLocalLogs(prev => 
-        prev.map(log => 
-          log.id === prev[0].id 
-            ? { ...log, status: "Fallido", title: "Error de conexión" }
+        prev.map((log, index) => 
+          index === 0 
+            ? { ...log, status: "Error Conexión" }
             : log
         )
       );
       
-      setResultado("⚠️ Error de conexión con la API de WhatsApp.");
+      setResultado("⚠️ Error de conexión con el servicio");
     } finally {
-      setTimeout(() => setResultado(""), 4000);
+      setTimeout(() => setResultado(""), 5000);
     }
-  };
-
-  const goBackPlaceholder = () => {
-    window.location.href = '/servineo';
   };
 
   // Función para limpiar logs locales
   const limpiarLogsLocales = () => {
     setLocalLogs([]);
-    localStorage.removeItem('servineo-local-logs');
+    localStorage.removeItem('servineo-par3-local-logs');
+    setLogMessage("🗑️ Historial local limpiado");
+    setTimeout(() => setLogMessage(""), 3000);
   };
-
-  // Combinar logs del backend con logs locales
-  const logsCombinados = [
-    ...localLogs.map(log => ({
-      status: log.status,
-      title: log.title,
-      fixer: log.fixer,
-      date: log.date
-    })),
-  ].slice(0, 10); // Mostrar máximo 10 logs
-
-  // Procesar historial visual del backend (código existente)
-  let visualLogHistory: HistoryItemProps[] = [];
-  if (logHistory.length > 0 && typeof logHistory[0] === "string") {
-    for (let i = 0; i < logHistory.length - 1; i++) {
-      const solicitudLine = logHistory[i];
-      const respuestaLine = logHistory[i + 1];
-      if (
-        solicitudLine.includes("Solicitud recibida") &&
-        respuestaLine.includes("Respuesta de API externa: Status 201")
-      ) {
-        const datos = parseSolicitud(solicitudLine);
-        visualLogHistory.push({
-          status: "Completado",
-          title: datos.descripcion || "Servicio",
-          fixer: datos.fixer,
-          date: datos.fecha,
-        });
-      }
-    }
-    visualLogHistory = visualLogHistory.slice(-5);
-  }
 
   return (
     <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center p-4 font-roboto">
@@ -255,10 +195,10 @@ Por favor, revisa y responde lo antes posible.`;
       `}</style>
       
       <div className="max-w-6xl w-full mx-auto p-6 bg-white rounded-2xl shadow-lg border border-[#D1D5DB]">
+        {/* Botón ATRAS */}
         <button
-          onClick={goBackPlaceholder}
+          onClick={() => router.push('/servineo')}
           className="flex items-center gap-2 px-4 py-2 bg-[#2B31E0] text-white rounded-lg hover:bg-[#2B6AE0] transition duration-300 font-medium mb-6"
-          title="Atrás"
         >
           <FaArrowLeft className="h-4 w-4" />
           <span>Volver</span>
@@ -267,65 +207,64 @@ Por favor, revisa y responde lo antes posible.`;
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* COLUMNA IZQUIERDA: HISTORIAL */}
           <div className="bg-white p-6 rounded-xl border border-[#E5E7EB]">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-center text-[#111827] py-3 rounded-lg text-xl font-bold flex items-center justify-center gap-2">
-                <FaHistory className="text-[#2B31E0]" /> Historial de Servicios
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-[#111827] text-xl font-bold flex items-center gap-2">
+                <FaHistory className="text-[#2B31E0]" /> Historial
               </h2>
               {localLogs.length > 0 && (
                 <button
                   onClick={limpiarLogsLocales}
-                  className="text-xs bg-[#EF4444] text-white px-2 py-1 rounded hover:bg-[#DC2626] transition"
+                  className="text-xs bg-[#EF4444] text-white px-3 py-1 rounded-lg hover:bg-[#DC2626] transition font-medium"
                 >
                   Limpiar
                 </button>
               )}
             </div>
 
+            {/* Mensaje temporal */}
+            {logMessage && (
+              <div className={`mb-4 p-2 rounded-lg text-sm font-medium text-center ${
+                logMessage.includes("✅") 
+                  ? "bg-[#16A34A]/10 text-[#16A34A] border border-[#16A34A]/30"
+                  : "bg-[#FFC857]/10 text-[#FFC857] border border-[#FFC857]/30"
+              }`}>
+                {logMessage}
+              </div>
+            )}
+
             <div className="max-h-[500px] overflow-y-auto pr-2">
-              {isLoadingLog && <p className="text-center text-[#64748B]">Cargando historial...</p>}
-              {logError && (
-                <div className="text-center text-[#EF4444] mb-4 text-sm">{logError}</div>
+              {localLogs.length === 0 ? (
+                <div className="text-center text-[#64748B] py-8">
+                  <FaHistory className="mx-auto text-4xl mb-2 opacity-50" />
+                  <p>No hay historial de servicios</p>
+                  <p className="text-sm mt-1">Los servicios aparecerán aquí después de enviarlos</p>
+                </div>
+              ) : (
+                localLogs.map((item) => (
+                  <HistoryItem
+                    key={item.id}
+                    status={item.status}
+                    title={item.title}
+                    fixer={item.fixer}
+                    date={item.date}
+                  />
+                ))
               )}
-              
-              {/* Mostrar logs combinados */}
-              {logsCombinados.length === 0 && !isLoadingLog && (
-                <p className="text-center text-[#64748B] mb-4 text-sm">No hay historial de servicios.</p>
-              )}
-              
-              {logsCombinados.map((item, index) => (
-                <HistoryItem
-                  key={index}
-                  status={item.status}
-                  title={item.title}
-                  fixer={item.fixer}
-                  date={item.date}
-                />
-              ))}
-            </div>
-            
-            <div className="flex gap-2 mt-4">
-              <button
-                onClick={fetchLogHistory}
-                disabled={isLoadingLog}
-                className="flex-1 py-2 text-sm rounded-lg bg-[#E5E7EB] text-[#111827] hover:bg-[#D1D5DB] transition disabled:opacity-50 font-medium border border-[#D1D5DB]"
-              >
-                {isLoadingLog ? "Refrescando..." : "Recargar Historial"}
-              </button>
             </div>
             
             <div className="mt-2 text-xs text-[#64748B] text-center">
-              {localLogs.length > 0 && `(${localLogs.length} logs locales)`}
+              {localLogs.length > 0 && `Mostrando ${localLogs.length} servicios locales`}
             </div>
           </div>
 
-          {/* ... (el resto del código del formulario se mantiene igual) */}
+          {/* COLUMNA DERECHA: FORMULARIO */}
           <div className="bg-white p-6 rounded-xl border border-[#E5E7EB]">
             <h2 className="text-center text-white bg-[#2B31E0] py-4 rounded-lg text-xl font-bold mb-6">
-              Solicitar Servicio PAR3
+              Solicitar Servicio
             </h2>
 
             <h3 className="text-[#2B31E0] font-bold text-lg mb-4 border-b border-[#E5E7EB] pb-2">
-              Datos del Requester
+              Datos del Cliente
             </h3>
 
             <div className="space-y-4">
@@ -356,7 +295,9 @@ Por favor, revisa y responde lo antes posible.`;
               </div>
 
               <div>
-                <label className="block text-[#111827] text-sm font-medium mb-2">Descripción del servicio</label>
+                <label className="block text-[#111827] text-sm font-medium mb-2">
+                  Descripción del servicio <span className="text-[#EF4444]">*</span>
+                </label>
                 <input
                   type="text"
                   id="descripcion"
@@ -378,8 +319,9 @@ Por favor, revisa y responde lo antes posible.`;
                   <div key={key} className="flex flex-col space-y-2">
                     <label className="text-[#111827] text-sm font-medium capitalize">
                       {key === "fixerTelefono"
-                        ? "Número Destino"
+                        ? "Número Destino *"
                         : key.replace("fixer", "").replace(/([A-Z])/g, " $1")}
+                      {key === "fixerTelefono" && <span className="text-[#EF4444]"> *</span>}
                     </label>
                     <div className="relative">
                       <input
@@ -419,7 +361,7 @@ Por favor, revisa y responde lo antes posible.`;
               onClick={enviarNotificacion}
               className="w-full mt-6 py-3 rounded-lg bg-[#2B31E0] text-white font-bold hover:bg-[#2B6AE0] transition duration-300 shadow-sm"
             >
-              Confirmar Solicitud
+              Solicitar
             </button>
 
             {resultado && (
@@ -427,7 +369,7 @@ Por favor, revisa y responde lo antes posible.`;
                 className={`mt-4 text-center font-medium p-3 rounded-lg border transition-all ${
                   resultado.startsWith("✅")
                     ? "bg-[#16A34A]/10 text-[#16A34A] border-[#16A34A]/30"
-                    : resultado.startsWith("❌")
+                    : resultado.startsWith("❌") || resultado.startsWith("⚠️")
                     ? "bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/30"
                     : "bg-[#FFC857]/10 text-[#FFC857] border-[#FFC857]/30"
                 }`}
