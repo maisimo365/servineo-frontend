@@ -1,0 +1,307 @@
+﻿/* app/globals.css - ESTRICTAMENTE CON ESTÁNDARES PROPORCIONADOS */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #F9FAFB; /* Fondo claro principal */
+  min-height: 100vh;
+  padding: 20px;
+  color: #111827; /* Texto principal oscuro */
+  line-height: 1.6;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+/* Header */
+.header {
+  text-align: center;
+  margin-bottom: 3rem;
+  padding: 2rem 0;
+}
+
+.main-title {
+  font-size: 3rem;
+  font-weight: 700; /* Roboto Bold */
+  color: #2B31E0; /* Primary Main Blue */
+  margin-bottom: 1rem;
+}
+
+.subtitle {
+  font-size: 1.3rem;
+  color: #111827; /* Texto principal */
+  opacity: 0.8;
+  font-weight: 400; /* Roboto Regular */
+}
+
+/* Tarjetas */
+.glass-card {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 2rem;
+  border: 1px solid #D1D5DB; /* Borde superficie */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  margin-bottom: 2rem;
+}
+
+.card-title {
+  font-size: 1.5rem;
+  font-weight: 500; /* Roboto Medium */
+  color: #2B31E0; /* Primary Main Blue */
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.card-title::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  background: #2B31E0; /* Primary Main Blue */
+  border-radius: 50%;
+}
+
+/* Grid de formulario */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-label {
+  font-weight: 500; /* Roboto Medium */
+  margin-bottom: 0.5rem;
+  color: #111827; /* Texto principal */
+  font-size: 0.95rem;
+}
+
+.form-input {
+  padding: 1rem;
+  border: 1px solid #D1D5DB; /* Borde superficie */
+  border-radius: 8px;
+  background: #FFFFFF;
+  color: #111827; /* Texto principal */
+  font-size: 1rem;
+  font-family: 'Roboto', sans-serif;
+  transition: all 0.2s ease;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #2B31E0; /* Primary Main Blue */
+  box-shadow: 0 0 0 3px rgba(43, 49, 224, 0.1);
+}
+
+.form-input::placeholder {
+  color: #64748B; /* Gris medio */
+}
+
+/* Botones PRINCIPALES con estándares */
+.button {
+  background: #2B31E0; /* Primary Main Blue */
+  color: #F9FAFB; /* Texto claro */
+  font-weight: 500; /* Roboto Medium */
+  padding: 1rem 2rem;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 1.1rem;
+  font-family: 'Roboto', sans-serif;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.button:hover {
+  background: #2B6AE0; /* Primary Medium - hover */
+}
+
+.button:active {
+  background: #1AA7ED; /* Primary Light - active */
+}
+
+.button.secondary {
+  background: #2BDDE0; /* Accent Turquesa */
+  color: #111827; /* Texto oscuro para contraste */
+}
+
+.button.secondary:hover {
+  background: #5E2BE0; /* Accent hover Púrpura */
+  color: #F9FAFB; /* Texto claro en hover */
+}
+
+.button:disabled {
+  background: #64748B; /* Gris medio para disabled */
+  color: #F9FAFB;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Estados del sistema */
+.status-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.status-item {
+  background: #FFFFFF;
+  padding: 1.5rem;
+  border-radius: 8px;
+  border-left: 4px solid #2B31E0; /* Primary Main Blue */
+  border: 1px solid #D1D5DB; /* Borde superficie */
+}
+
+.status-label {
+  font-size: 0.9rem;
+  color: #64748B; /* Gris medio */
+  margin-bottom: 0.5rem;
+  font-weight: 400; /* Roboto Regular */
+}
+
+.status-value {
+  font-size: 1.2rem;
+  font-weight: 600; /* Roboto SemiBold */
+  color: #111827; /* Texto principal */
+}
+
+/* Mensajes del sistema CON ESTÁNDARES */
+.system-message {
+  padding: 1rem;
+  border-radius: 8px;
+  margin: 1rem 0;
+  text-align: center;
+  font-weight: 500; /* Roboto Medium */
+  border: 1px solid;
+}
+
+.message-success {
+  background: rgba(22, 163, 74, 0.1); /* Éxito 16A34A */
+  border-color: #16A34A;
+  color: #166534;
+}
+
+.message-error {
+  background: rgba(239, 68, 68, 0.1); /* Error EF4444 */
+  border-color: #EF4444;
+  color: #dc2626;
+}
+
+.message-advertencia {
+  background: rgba(245, 158, 11, 0.1); /* Advertencia F59E0B */
+  border-color: #F59E0B;
+  color: #d97706;
+}
+
+/* Badges con colores estándar */
+.badge {
+  background: #759AE0; /* Highlight blue */
+  color: #F9FAFB;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.badge-success {
+  background: #16A34A; /* Éxito */
+}
+
+.badge-warning {
+  background: #F59E0B; /* Advertencia */
+}
+
+.badge-error {
+  background: #EF4444; /* Error */
+}
+
+/* Estados de disponibilidad EXACTOS */
+.estado-disponible { 
+  background: #16A34A; /* Disponible - verde éxito */
+  color: #F9FAFB; 
+}
+
+.estado-reservado { 
+  background: #64748B; /* Reservado - gris medio */
+  color: #F9FAFB; 
+}
+
+.estado-pendiente { 
+  background: #FFC857; /* Pendiente - amarillo */
+  color: #111827; 
+}
+
+.estado-bloqueado { 
+  background: #E6EDF3; /* Bloqueado - azul muy claro */
+  color: #111827; 
+}
+
+/* Estilos para pre/código */
+pre {
+  font-family: 'Roboto Mono', 'Courier New', monospace;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  background: #E5E7EB; /* Fondo secundario */
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid #D1D5DB;
+  color: #111827;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .main-title {
+    font-size: 2.2rem;
+  }
+  
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .glass-card {
+    padding: 1.5rem;
+  }
+}
+
+/* Animaciones simples */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.glass-card {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Mejoras de accesibilidad */
+@media (prefers-reduced-motion: reduce) {
+  .glass-card {
+    animation: none;
+  }
+}
+
+/* Focus visible para accesibilidad */
+.button:focus-visible {
+  outline: 2px solid #2B31E0;
+  outline-offset: 2px;
+}
+
+.form-input:focus-visible {
+  outline: 2px solid #2B31E0;
+  outline-offset: 1px;
+}
