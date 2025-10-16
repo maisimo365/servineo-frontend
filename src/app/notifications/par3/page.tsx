@@ -31,7 +31,7 @@ export default function Par3Page() {
     setIsLoadingLog(true);
     setLogError("");
     try {
-      const response = await fetch("http://localhost:3001/api/par3/historial");
+      const response = await fetch("https://servineo-backend.onrender.com/api/par3/historial");
       if (response.ok) {
         const data = await response.json();
         if (Array.isArray(data.parsedLog)) {
