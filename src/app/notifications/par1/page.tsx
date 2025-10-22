@@ -1,11 +1,11 @@
-﻿// app/page.tsx - VERSION CON VERIFICACIÓN DE FIXER Y SERVICIO DUPLICADO
+﻿// app/page.tsx - VERSION CON VALIDACIÓN DE 8 DÍGITOS Y REINTENTOS CONDICIONALES
 "use client"
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { FaArrowLeft, FaExclamationTriangle } from 'react-icons/fa'
 
-// Interfaces y tipos (AGREGAR NUEVA INTERFACE)
+// Interfaces y tipos
 interface FormData {
   region: string
   numero: string
@@ -56,7 +56,6 @@ interface LogReintento {
   error?: string
 }
 
-// 🔥 NUEVA INTERFACE PARA LOG DE VERIFICACIÓN
 interface LogVerificacion {
   timestamp: Date
   tipo: 'verificacion_duplicado' | 'registro_exitoso' | 'error'
@@ -71,10 +70,17 @@ interface LogVerificacion {
   }
 }
 
-// Constantes (AGREGAR NUEVA CONSTANTE)
+// NUEVA INTERFACE PARA ERROR DE CANAL
+interface ErrorCanal {
+  tipo: 'sin_whatsapp' | 'opt_out' | 'canal_invalido' | 'numero_invalido'
+  mensaje: string
+  numero: string
+}
+
+// Constantes
 const SOLICITUDES_KEY = 'solicitudes_registradas'
 const ULTIMAS_SOLICITUDES_KEY = 'ultimas_solicitudes'
-const LOGS_VERIFICACION_KEY = 'logs_verificacion_duplicados' // 🔥 NUEVO: Key para logs
+const LOGS_VERIFICACION_KEY = 'logs_verificacion_duplicados'
 
 export default function SistemaSolicitudes() {
   const router = useRouter()
@@ -89,7 +95,7 @@ export default function SistemaSolicitudes() {
   const [jsonEnviado, setJsonEnviado] = useState('')
   const [respuestaServidor, setRespuestaServidor] = useState('')
   const [logsReintentos, setLogsReintentos] = useState<LogReintento[]>([])
-  const [duplicadoDetectado, setDuplicadoDetectado] = useState<{encontrado: boolean, codigo: string, datos: any} | null>(null) // 🔥 NUEVO: Estado para duplicado
+  const [duplicadoDetectado, setDuplicadoDetectado] = useState<{encontrado: boolean, codigo: string, datos: any} | null>(null)
 
   const [formData, setFormData] = useState<FormData>({
     region: '591',
@@ -114,12 +120,12 @@ export default function SistemaSolicitudes() {
     if (!localStorage.getItem(ULTIMAS_SOLICITUDES_KEY)) {
       localStorage.setItem(ULTIMAS_SOLICITUDES_KEY, JSON.stringify([]))
     }
-    if (!localStorage.getItem(LOGS_VERIFICACION_KEY)) { // 🔥 NUEVO: Inicializar logs
+    if (!localStorage.getItem(LOGS_VERIFICACION_KEY)) {
       localStorage.setItem(LOGS_VERIFICACION_KEY, JSON.stringify([]))
     }
   }
 
-  // 🔥 NUEVA FUNCIÓN: Guardar log de verificación
+  // FUNCIÓN: Guardar log de verificación
   const guardarLogVerificacion = (log: LogVerificacion) => {
     try {
       const logsExistentes: LogVerificacion[] = JSON.parse(localStorage.getItem(LOGS_VERIFICACION_KEY) || '[]')
@@ -137,7 +143,7 @@ export default function SistemaSolicitudes() {
     }
   }
 
-  // 🔥 NUEVA FUNCIÓN MEJORADA: Verificar duplicados por fixer y servicio
+  // FUNCIÓN MEJORADA: Verificar duplicados por fixer y servicio
   const verificarDuplicadoFixerServicio = (nombreFixer: string, servicio: string): {encontrado: boolean, codigo: string, solicitud: Solicitud | null} => {
     if (!nombreFixer || nombreFixer.trim() === '') {
       return { encontrado: false, codigo: '', solicitud: null }
@@ -234,6 +240,116 @@ export default function SistemaSolicitudes() {
     return descripcion.substring(0, maxLength) + '...'
   }
 
+  // FUNCIÓN MODIFICADA: Validar canal WhatsApp SOLO para números de 8 dígitos
+  const validarCanal = (numero: string): {valido: boolean, error?: ErrorCanal, requiereReintentos?: boolean} => {
+    // Limpiar número (solo dígitos)
+    const numeroLimpio = numero.replace(/\D/g, '')
+    
+    // Casos que ACTIVAN REINTENTOS
+    if (!numeroLimpio || numeroLimpio.trim() === '') {
+      return {
+        valido: false,
+        error: {
+          tipo: 'numero_invalido',
+          mensaje: 'Número no puede estar vacío',
+          numero: numero
+        },
+        requiereReintentos: true // ✅ ACTIVA REINTENTOS
+      }
+    }
+    
+    if (numeroLimpio.length < 8) {
+      return {
+        valido: false,
+        error: {
+          tipo: 'numero_invalido',
+          mensaje: 'Número debe tener al menos 8 dígitos',
+          numero: numero
+        },
+        requiereReintentos: true // ✅ ACTIVA REINTENTOS
+      }
+    }
+    
+    if (numeroLimpio.length > 8) {
+      return {
+        valido: false,
+        error: {
+          tipo: 'numero_invalido', 
+          mensaje: 'Número no puede tener más de 8 dígitos',
+          numero: numero
+        },
+        requiereReintentos: true // ✅ ACTIVA REINTENTOS
+      }
+    }
+    
+    // SOLO para números de exactamente 8 dígitos: validar WhatsApp
+    if (numeroLimpio.length === 8) {
+      // Simulación de detección de números sin WhatsApp
+      const numerosSinWhatsApp = ['77480958', '77400598', '77400998', '77400508']
+      
+      if (numerosSinWhatsApp.includes(numeroLimpio)) {
+        return {
+          valido: false,
+          error: {
+            tipo: 'sin_whatsapp',
+            mensaje: 'El contacto no permite este canal',
+            numero: numeroLimpio
+          },
+          requiereReintentos: false // ❌ NO ACTIVA REINTENTOS
+        }
+      }
+      
+      const numerosInvalidos = ['123456789', '000000000']
+      if (numerosInvalidos.includes(numeroLimpio)) {
+        return {
+          valido: false,
+          error: {
+            tipo: 'canal_invalido',
+            mensaje: 'Número sin WhatsApp',
+            numero: numeroLimpio
+          },
+          requiereReintentos: false // ❌ NO ACTIVA REINTENTOS
+        }
+      }
+    }
+    
+    // Número válido de 8 dígitos con WhatsApp
+    return { 
+      valido: true,
+      requiereReintentos: true // ✅ ACTIVA REINTENTOS para envío normal
+    }
+  }
+
+  // FUNCIÓN: Detectar errores de canal desde respuesta
+  const detectarErrorCanalDesdeRespuesta = (respuestaError: string): {mensaje: string, requiereReintentos: boolean} => {
+    if (respuestaError.includes('exists') && respuestaError.includes('false')) {
+      return {
+        mensaje: 'El contacto no permite este canal',
+        requiereReintentos: false
+      }
+    }
+    
+    if (respuestaError.includes('sin WhatsApp') || respuestaError.includes('no tiene WhatsApp')) {
+      return {
+        mensaje: 'Número sin WhatsApp',
+        requiereReintentos: false
+      }
+    }
+    
+    if (respuestaError.includes('opt-out') || respuestaError.includes('opt out')) {
+      return {
+        mensaje: 'Usuario ha optado por no recibir mensajes',
+        requiereReintentos: false
+      }
+    }
+    
+    // Para otros errores 400, activar reintentos
+    return {
+      mensaje: 'Error en el envío del mensaje',
+      requiereReintentos: true
+    }
+  }
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { id, value } = e.target
     setFormData(prev => ({
@@ -241,7 +357,7 @@ export default function SistemaSolicitudes() {
       [id]: value
     }))
 
-    // 🔥 NUEVO: Verificar duplicados en tiempo real cuando se modifica fixer o servicio
+    // Verificar duplicados en tiempo real cuando se modifica fixer o servicio
     if ((id === 'nombreFixer' || id === 'servicio') && value.trim() !== '') {
       const nombreFixer = id === 'nombreFixer' ? value : formData.nombreFixer
       const servicio = id === 'servicio' ? value : formData.servicio
@@ -276,10 +392,10 @@ export default function SistemaSolicitudes() {
   const limpiarMensajes = () => {
     setMensajeSistema('')
     setTipoMensaje('')
-    setDuplicadoDetectado(null) // 🔥 NUEVO: Limpiar también el estado de duplicado
+    setDuplicadoDetectado(null)
   }
 
-  // 🔥 FUNCIONES DE VERIFICACIÓN DE DUPLICADOS ORIGINAL (modificada para coexistir)
+  // FUNCIONES DE VERIFICACIÓN DE DUPLICADOS ORIGINAL
   const calcularSimilitud = (str1: string, str2: string): number => {
     if (str1.length === 0 && str2.length === 0) return 1.0;
     const longer = str1.length > str2.length ? str1 : str2;
@@ -397,7 +513,7 @@ export default function SistemaSolicitudes() {
     
     localStorage.setItem(ULTIMAS_SOLICITUDES_KEY, JSON.stringify(ultimasSolicitudes))
     
-    // 🔥 NUEVO: Guardar log de registro exitoso
+    // Guardar log de registro exitoso
     guardarLogVerificacion({
       timestamp: new Date(),
       tipo: 'registro_exitoso',
@@ -433,11 +549,6 @@ export default function SistemaSolicitudes() {
     if (solicitud.tieneFixerEspecifico) {
       setEstadoSolicitud(`${solicitud.estado} (Fixer: ${solicitud.nombreFixer})`)
     }
-  }
-
-  const validarCanal = (numero: string): boolean => {
-    const numerosInvalidos = ['123456789', '000000000']
-    return !numerosInvalidos.includes(numero)
   }
 
   const generarMensajeConfirmacion = (solicitud: Solicitud): MensajeAPI => {
@@ -502,71 +613,137 @@ export default function SistemaSolicitudes() {
     }
   }
 
-  const enviarMensajes = async (solicitud: Solicitud): Promise<void> => {
-    const inicioEnvio = Date.now()
+  // FUNCIÓN MODIFICADA: enviarMensajes con reintentos condicionales
+  // FUNCIÓN CORREGIDA: enviarMensajes con reintentos condicionales
+const enviarMensajes = async (solicitud: Solicitud): Promise<void> => {
+  const inicioEnvio = Date.now()
+  
+  try {
+    // Validar el canal ANTES de intentar el envío
+    const validacionCanal = validarCanal(solicitud.numero)
     
-    try {
-      if (!validarCanal(solicitud.region + solicitud.numero)) {
-        throw new Error('El contacto no permite este canal.')
-      }
-
-      const mensajeConfirmacion = generarMensajeConfirmacion(solicitud)
+    if (!validacionCanal.valido) {
+      const mensajeError = validacionCanal.error?.mensaje || 'Error de validación del número'
       
-      agregarLogReintento(1, 0, 'Iniciando envío...')
-      const { respuesta, tiempoRespuesta } = await enviarMensajeAPI(mensajeConfirmacion, solicitud.codigoUnico)
+      agregarLogReintento(1, 0, `❌ VALIDACIÓN FALLIDA: ${mensajeError}`)
       
-      agregarLogReintento(1, 0, '✅ ENVÍO EXITOSO', tiempoRespuesta)
-      
-      const tiempoEnvio = Date.now() - inicioEnvio
-      console.log(`Tiempo de envío: ${tiempoEnvio}ms`)
-      
-      if (tiempoEnvio > 5000) {
-        console.warn('El envío tardó más de 5 segundos')
-      }
-      
-      return
-      
-    } catch (error: any) {
-      agregarLogReintento(1, 0, '❌ FALLÓ', undefined, error.message)
-      
-      let intento = 2
-      const tiemposEspera = [5000, 15000, 30000]
-      
-      while (intento <= 4) {
-        const tiempoEspera = tiemposEspera[intento - 2]
+      // Si requiere reintentos, LANZAR ERROR para activar el flujo de reintentos
+      if (validacionCanal.requiereReintentos) {
+        agregarLogReintento(1, 0, `⚠️ Número inválido pero se activarán reintentos`)
+        // Lanzar error para que entre en el catch y active los reintentos
+        throw new Error(`Validación fallida: ${mensajeError}`)
+      } else {
+        // No requiere reintentos (errores de WhatsApp)
+        mostrarMensaje(`✅ Solicitud registrada (${solicitud.codigoUnico}), pero ${mensajeError.toLowerCase()}`, 'advertencia')
         
-        try {
-          agregarLogReintento(intento, tiempoEspera, `⏳ Esperando ${tiempoEspera}ms para reintento...`)
-          
-          await new Promise(resolve => setTimeout(resolve, tiempoEspera))
-          
-          agregarLogReintento(intento, tiempoEspera, '🔄 Realizando reintento...')
-          
-          const mensajeConfirmacion = generarMensajeConfirmacion(solicitud)
-          const { respuesta, tiempoRespuesta } = await enviarMensajeAPI(mensajeConfirmacion, solicitud.codigoUnico + '-reintento-' + (intento - 1))
-          
-          agregarLogReintento(intento, tiempoEspera, '✅ REINTENTO EXITOSO', tiempoRespuesta)
-          
-          console.log(`Reintento ${intento - 1} exitoso`)
-          return
-          
-        } catch (errorRetry: any) {
-          agregarLogReintento(intento, tiempoEspera, `❌ REINTENTO FALLIDO`, undefined, errorRetry.message)
-          
-          console.error(`Reintento ${intento - 1} fallido:`, errorRetry)
-          intento++
-        }
+        guardarLogVerificacion({
+          timestamp: new Date(),
+          tipo: 'error',
+          codigoSolicitud: solicitud.codigoUnico,
+          nombreFixer: solicitud.nombreFixer || 'Sin fixer específico',
+          servicio: solicitud.servicio,
+          mensaje: `Error de canal: ${mensajeError} - Número: ${solicitud.numero}`,
+          datosComparados: {
+            fixer: solicitud.nombreFixer || 'Sin fixer específico',
+            servicio: solicitud.servicio,
+            nombreCliente: solicitud.nombreRequester
+          }
+        })
+        return // Detener el proceso aquí para errores de WhatsApp
+      }
+    }
+
+    // Si el canal es válido, proceder con el envío normal
+    const mensajeConfirmacion = generarMensajeConfirmacion(solicitud)
+    
+    agregarLogReintento(1, 0, 'Iniciando envío...')
+    const { respuesta, tiempoRespuesta } = await enviarMensajeAPI(mensajeConfirmacion, solicitud.codigoUnico)
+    
+    agregarLogReintento(1, 0, '✅ ENVÍO EXITOSO', tiempoRespuesta)
+    
+    const tiempoEnvio = Date.now() - inicioEnvio
+    console.log(`Tiempo de envío: ${tiempoEnvio}ms`)
+    
+    mostrarMensaje('✅ Solicitud registrada y mensaje enviado exitosamente!', 'success')
+    return
+    
+  } catch (error: any) {
+    // MANEJO MEJORADO DE ERRORES CON REINTENTOS CONDICIONALES
+    
+    // Si es un error de validación que requiere reintentos, proceder con reintentos
+    if (error.message.includes('Validación fallida:')) {
+      agregarLogReintento(1, 0, `❌ ERROR VALIDACIÓN: ${error.message}`)
+      // Continuar al flujo de reintentos
+    }
+    else if (error.message.includes('400') || error.message.includes('Bad Request')) {
+      const deteccionError = detectarErrorCanalDesdeRespuesta(error.message)
+      
+      agregarLogReintento(1, 0, `❌ ERROR 400: ${deteccionError.mensaje}`)
+      
+      if (!deteccionError.requiereReintentos) {
+        // No requiere reintentos (errores de WhatsApp)
+        mostrarMensaje(`✅ Solicitud registrada (${solicitud.codigoUnico}), pero ${deteccionError.mensaje.toLowerCase()}`, 'advertencia')
+        return
       }
       
-      const tiempoTotal = Date.now() - inicioEnvio
-      const mensajeError = `Solicitud creada (Código ${solicitud.codigoUnico}), pero no pudimos enviar la confirmación después de 3 reintentos. Tiempo total: ${tiempoTotal}ms. Intenta revisar el estado en la app.`
-      
-      agregarLogReintento(0, tiempoTotal, `💥 TODOS LOS REINTENTOS FALLARON`, undefined, mensajeError)
-      
-      mostrarMensaje(mensajeError, 'advertencia')
-      throw new Error(mensajeError)
+      // Si requiere reintentos, continuar al flujo de reintentos
+      agregarLogReintento(1, 0, `⚠️ Error 400 pero se reintentará`)
+    } else {
+      agregarLogReintento(1, 0, '❌ FALLÓ', undefined, error.message)
     }
+    
+    // FLUJO DE REINTENTOS (5s, 15s, 30s) - PARA TODOS LOS ERRORES QUE LLEGAN AQUÍ
+    let intento = 2
+    const tiemposEspera = [5000, 15000, 30000]
+    
+    while (intento <= 4) {
+      const tiempoEspera = tiemposEspera[intento - 2]
+      
+      try {
+        agregarLogReintento(intento, tiempoEspera, `⏳ Esperando ${tiempoEspera}ms para reintento...`)
+        
+        await new Promise(resolve => setTimeout(resolve, tiempoEspera))
+        
+        agregarLogReintento(intento, tiempoEspera, '🔄 Realizando reintento...')
+        
+        // En cada reintento, validar nuevamente el canal
+        if (intento === 2) { // Solo en el primer reintento validar
+          const validacionReintento = validarCanal(solicitud.numero)
+          if (!validacionReintento.valido && !validacionReintento.requiereReintentos) {
+            // Si en el reintento detectamos error de WhatsApp, salir
+            agregarLogReintento(intento, tiempoEspera, `❌ CANAL INVÁLIDO EN REINTENTO: ${validacionReintento.error?.mensaje}`)
+            mostrarMensaje(`✅ Solicitud registrada (${solicitud.codigoUnico}), pero ${validacionReintento.error?.mensaje?.toLowerCase()}`, 'advertencia')
+            return
+          }
+        }
+        
+        const mensajeConfirmacion = generarMensajeConfirmacion(solicitud)
+        const { respuesta, tiempoRespuesta } = await enviarMensajeAPI(mensajeConfirmacion, solicitud.codigoUnico + '-reintento-' + (intento - 1))
+        
+        agregarLogReintento(intento, tiempoEspera, '✅ REINTENTO EXITOSO', tiempoRespuesta)
+        
+        console.log(`Reintento ${intento - 1} exitoso`)
+        mostrarMensaje('✅ Solicitud registrada y mensaje enviado exitosamente!', 'success')
+        return
+        
+      } catch (errorRetry: any) {
+        agregarLogReintento(intento, tiempoEspera, `❌ REINTENTO FALLIDO`, undefined, errorRetry.message)
+        
+        console.error(`Reintento ${intento - 1} fallido:`, errorRetry)
+        intento++
+      }
+    }
+    
+    // Si todos los reintentos fallaron
+    const tiempoTotal = Date.now() - inicioEnvio
+    const mensajeError = `Solicitud creada (Código ${solicitud.codigoUnico}), pero no pudimos enviar la confirmación después de 3 reintentos. Tiempo total: ${tiempoTotal}ms. Intenta revisar el estado en la app.`
+    
+    agregarLogReintento(0, tiempoTotal, `💥 TODOS LOS REINTENTOS FALLARON`, undefined, mensajeError)
+    
+    mostrarMensaje(mensajeError, 'advertencia')
+    throw new Error(mensajeError)
   }
+}
 
   const procesarSolicitud = async () => {
     setProcesando(true)
@@ -581,7 +758,7 @@ export default function SistemaSolicitudes() {
         throw new Error('Por favor complete todos los campos requeridos')
       }
 
-      // 🔥 NUEVO: Verificación específica por fixer y servicio
+      // 2. Verificación específica por fixer y servicio
       if (formData.nombreFixer.trim() !== '') {
         const resultadoDuplicado = verificarDuplicadoFixerServicio(formData.nombreFixer, formData.servicio)
         if (resultadoDuplicado.encontrado) {
@@ -589,10 +766,10 @@ export default function SistemaSolicitudes() {
         }
       }
 
-      // 2. Preparar datos de la solicitud
+      // 3. Preparar datos de la solicitud
       const solicitud = prepararSolicitud()
       
-      // 3. Verificar duplicados (para casos sin fixer específico)
+      // 4. Verificar duplicados (para casos sin fixer específico)
       const duplicado = verificarDuplicados(solicitud)
       if (duplicado) {
         mostrarMensaje(
@@ -603,13 +780,11 @@ export default function SistemaSolicitudes() {
         return
       }
 
-      // 4. Registrar solicitud
+      // 5. Registrar solicitud
       const solicitudRegistrada = await registrarSolicitud(solicitud)
       
-      // 5. Enviar mensajes
+      // 6. Intentar enviar mensajes (manejará internamente los errores de canal y reintentos)
       await enviarMensajes(solicitudRegistrada)
-      
-      mostrarMensaje('✅ Solicitud registrada y mensaje enviado exitosamente!', 'success')
       
     } catch (error: any) {
       mostrarMensaje(error.message, 'error')
@@ -662,7 +837,7 @@ export default function SistemaSolicitudes() {
         <p className="subtitle">Gestiona solicitudes y comunica con los Fixers fácilmente</p>
       </div>
 
-      {/* 🔥 NUEVO: Alerta de duplicado detectado en tiempo real */}
+      {/* Alerta de duplicado detectado en tiempo real */}
       {duplicadoDetectado && duplicadoDetectado.encontrado && (
         <div className="system-message message-advertencia" style={{
           display: 'flex',
@@ -730,15 +905,20 @@ export default function SistemaSolicitudes() {
             />
           </div>
           <div className="form-group">
-            <label className="form-label">Número</label>
+            <label className="form-label">Número *</label>
             <input
               type="text"
               id="numero"
               value={formData.numero}
               onChange={handleInputChange}
               className="form-input"
-              placeholder="Ej: 69542509"
+              placeholder="Ej: 69542509 (8 dígitos)"
+              required
             />
+            <small style={{color: '#94a3b8', fontSize: '0.8rem', marginTop: '5px'}}> 
+              <br />
+              <br />
+            </small>
           </div>
           <div className="form-group" style={{gridColumn: '1 / -1'}}>
             <label className="form-label">Nombre del Cliente *</label>
@@ -825,17 +1005,16 @@ export default function SistemaSolicitudes() {
       </div>
 
       {/* Botón de acción */}
-      // Botón de acción - CORREGIDO
-    <div style={{textAlign: 'center', marginTop: '2rem'}}>
-      <button 
-        onClick={procesarSolicitud}
-        disabled={procesando || (duplicadoDetectado ? duplicadoDetectado.encontrado : false)}
-        className="button"
-        style={{minWidth: '200px'}}
-      >
-        {procesando ? '⏳ Procesando...' : '🚀 Registrar Solicitud'}
-      </button>
-    </div>
+      <div style={{textAlign: 'center', marginTop: '2rem'}}>
+        <button 
+          onClick={procesarSolicitud}
+          disabled={procesando || (duplicadoDetectado ? duplicadoDetectado.encontrado : false)}
+          className="button"
+          style={{minWidth: '200px'}}
+        >
+          {procesando ? '⏳ Procesando...' : '🚀 Registrar Solicitud'}
+        </button>
+      </div>
 
       {/* Debug información - JSON enviado y respuesta */}
       {(jsonEnviado || respuestaServidor) && (
