@@ -21,7 +21,6 @@ export default function Par3Page() {
   const router = useRouter();
   const [fixer, setFixer] = useState<Fixer>(initialFixerState);
   const [editando, setEditando] = useState<keyof Fixer | null>(null);
-  const [resultado, setResultado] = useState<string>("");
   const [clientData, setClientData] = useState<ClientData>(initialClientState);
   const [localLogs, setLocalLogs] = useState<LocalLog[]>([]);
   const [logMessage, setLogMessage] = useState<string>("");
@@ -50,8 +49,8 @@ export default function Par3Page() {
 
   const guardarCambio = (id: keyof Fixer) => {
     setEditando(null);
-    setResultado(`Campo actualizado: ${fixer[id]}`);
-    setTimeout(() => setResultado(""), 2000);
+    // Cambiado a alert nativo
+    alert(Campo actualizado: ${fixer[id]});
   };
 
   const handleFixerChange = (id: keyof Fixer, value: string) => {
@@ -84,27 +83,24 @@ export default function Par3Page() {
     
     const URL_RESPUESTA = "https://tuapp.com/responder-solicitud";
 
-    // Validaciones
+    // Validaciones - cambiadas a alert nativo
     if (!fixerTelefono || fixerTelefono.trim() === "") {
-      setResultado("❌ Error: El campo 'Número Destino' del Fixer es obligatorio");
-      setTimeout(() => setResultado(""), 4000);
+      alert("❌ Error: El campo 'Número Destino' del Fixer es obligatorio");
       return;
     }
 
     if (!telefonoCliente || telefonoCliente.trim() === "") {
-      setResultado("❌ Error: El teléfono del cliente es obligatorio");
-      setTimeout(() => setResultado(""), 4000);
+      alert("❌ Error: El teléfono del cliente es obligatorio");
       return;
     }
 
     if (!descripcion || descripcion.trim() === "") {
-      setResultado("❌ Error: La descripción del servicio es obligatoria");
-      setTimeout(() => setResultado(""), 4000);
+      alert("❌ Error: La descripción del servicio es obligatoria");
       return;
     }
 
     // Agregar log local inmediatamente
-    agregarLogLocal("Enviando", `Solicitud: ${descripcion.substring(0, 30)}...`);
+    agregarLogLocal("Enviando", Solicitud: ${descripcion.substring(0, 30)}...);
 
     const texto = `¡Hola ${fixerNombre}, el ${fixerProfesion}!
 Nueva solicitud de servicio.
@@ -135,7 +131,8 @@ Por favor, revisa y responde lo antes posible.`;
       });
 
       if (respuesta.ok) {
-        setResultado("✅ Notificación enviada correctamente al Fixer: " + fixerTelefono);
+        // Cambiado a alert nativo
+        alert("✅ Notificación enviada correctamente al Fixer: " + fixerTelefono);
         
         // Actualizar log local a exitoso
         setLocalLogs(prev => 
@@ -161,7 +158,8 @@ Por favor, revisa y responde lo antes posible.`;
           )
         );
         
-        setResultado(`❌ Error ${respuesta.status}: No se pudo enviar la notificación`);
+        // Cambiado a alert nativo
+        alert(❌ Error ${respuesta.status}: No se pudo enviar la notificación);
       }
     } catch (error) {
       console.error("Error en la petición:", error);
@@ -174,9 +172,8 @@ Por favor, revisa y responde lo antes posible.`;
         )
       );
       
-      setResultado("⚠️ Error de conexión con el servicio");
-    } finally {
-      setTimeout(() => setResultado(""), 5000);
+      // Cambiado a alert nativo
+      alert("⚠ Error de conexión con el servicio");
     }
   };
 
@@ -184,8 +181,8 @@ Por favor, revisa y responde lo antes posible.`;
   const limpiarLogsLocales = () => {
     setLocalLogs([]);
     localStorage.removeItem('servineo-par3-local-logs');
-    setLogMessage("🗑️ Historial local limpiado");
-    setTimeout(() => setLogMessage(""), 3000);
+    // Cambiado a alert nativo
+    alert("🗑 Historial local limpiado");
   };
 
   return (
@@ -221,7 +218,7 @@ Por favor, revisa y responde lo antes posible.`;
               )}
             </div>
 
-            {/* Mensaje temporal */}
+            {/* Mensaje temporal - eliminado ya que usaremos alerts */}
             {logMessage && (
               <div className={`mb-4 p-2 rounded-lg text-sm font-medium text-center ${
                 logMessage.includes("✅") 
@@ -253,7 +250,7 @@ Por favor, revisa y responde lo antes posible.`;
             </div>
             
             <div className="mt-2 text-xs text-[#64748B] text-center">
-              {localLogs.length > 0 && `Mostrando ${localLogs.length} servicios locales`}
+              {localLogs.length > 0 && Mostrando ${localLogs.length} servicios locales}
             </div>
           </div>
 
@@ -364,19 +361,7 @@ Por favor, revisa y responde lo antes posible.`;
               Solicitar
             </button>
 
-            {resultado && (
-              <div
-                className={`mt-4 text-center font-medium p-3 rounded-lg border transition-all ${
-                  resultado.startsWith("✅")
-                    ? "bg-[#16A34A]/10 text-[#16A34A] border-[#16A34A]/30"
-                    : resultado.startsWith("❌") || resultado.startsWith("⚠️")
-                    ? "bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/30"
-                    : "bg-[#FFC857]/10 text-[#FFC857] border-[#FFC857]/30"
-                }`}
-              >
-                {resultado}
-              </div>
-            )}
+            {/* Eliminado el componente de notificación estilizado */}
           </div>
         </div>
       </div>
