@@ -46,6 +46,15 @@ interface MensajeAPI {
   text: string
 }
 
+interface LogReintento {
+  intento: number
+  timestamp: Date
+  tiempoEspera: number
+  resultado: string
+  tiempoRespuesta?: number
+  error?: string
+}
+
 // Constantes
 const SOLICITUDES_KEY = 'solicitudes_registradas'
 const ULTIMAS_SOLICITUDES_KEY = 'ultimas_solicitudes'
@@ -61,6 +70,7 @@ export default function SistemaSolicitudes() {
   const [procesando, setProcesando] = useState(false)
   const [jsonEnviado, setJsonEnviado] = useState('')
   const [respuestaServidor, setRespuestaServidor] = useState('')
+  const [logsReintentos, setLogsReintentos] = useState<LogReintento[]>([])
 
   const [formData, setFormData] = useState<FormData>({
     region: '591',
@@ -336,10 +346,30 @@ export default function SistemaSolicitudes() {
     }
   }
 
-  const enviarMensajeAPI = async (mensaje: MensajeAPI, idempotencyKey: string): Promise<string> => {
+  // 🔥 FUNCIÓN MEJORADA: Agregar log de reintento
+  const agregarLogReintento = (intento: number, tiempoEspera: number, resultado: string, tiempoRespuesta?: number, error?: string) => {
+    const nuevoLog: LogReintento = {
+      intento,
+      timestamp: new Date(),
+      tiempoEspera,
+      resultado,
+      tiempoRespuesta,
+      error
+    }
+    
+    setLogsReintentos(prev => [...prev, nuevoLog])
+    
+    // Actualizar también la respuesta del servidor para mostrar en tiempo real
+    const tiempoFormateado = new Date().toLocaleTimeString()
+    const logEntry = `[${tiempoFormateado}] Intento ${intento}: ${resultado} (Espera: ${tiempoEspera}ms${tiempoRespuesta ? `, Respuesta: ${tiempoRespuesta}ms` : ''}${error ? `, Error: ${error}` : ''})`
+    
+    setRespuestaServidor(prev => prev ? prev + '\n' + logEntry : logEntry)
+  }
+
+  const enviarMensajeAPI = async (mensaje: MensajeAPI, idempotencyKey: string): Promise<{respuesta: string, tiempoRespuesta: number}> => {
+    const inicio = Date.now() // 🔥 MOVER fuera del try para que esté disponible en el catch
+    
     try {
-      const inicio = Date.now()
-      
       // Mostrar JSON que se enviará
       setJsonEnviado(JSON.stringify(mensaje, null, 2))
       
@@ -357,19 +387,18 @@ export default function SistemaSolicitudes() {
       const tiempoRespuesta = Date.now() - inicio
       const respuesta = await res.text()
       
-      setRespuestaServidor(`Código: ${res.status}\nTiempo: ${tiempoRespuesta}ms\n\n${respuesta}`)
-
       if (!res.ok) {
         throw new Error(`Error ${res.status}: ${respuesta}`)
       }
 
-      return respuesta
+      return { respuesta, tiempoRespuesta }
     } catch (err: any) {
-      setRespuestaServidor("Error al enviar: " + err.message)
-      throw err
+      const tiempoRespuesta = Date.now() - inicio // 🔥 Ahora 'inicio' está disponible
+      throw new Error(`Error al enviar: ${err.message} (Tiempo: ${tiempoRespuesta}ms)`)
     }
   }
 
+  // 🔥 FUNCIÓN MEJORADA: Envío de mensajes con logs detallados
   const enviarMensajes = async (solicitud: Solicitud): Promise<void> => {
     const inicioEnvio = Date.now()
     
@@ -379,7 +408,12 @@ export default function SistemaSolicitudes() {
       }
 
       const mensajeConfirmacion = generarMensajeConfirmacion(solicitud)
-      const respuesta = await enviarMensajeAPI(mensajeConfirmacion, solicitud.codigoUnico)
+      
+      // Intento inicial
+      agregarLogReintento(1, 0, 'Iniciando envío...')
+      const { respuesta, tiempoRespuesta } = await enviarMensajeAPI(mensajeConfirmacion, solicitud.codigoUnico)
+      
+      agregarLogReintento(1, 0, '✅ ENVÍO EXITOSO', tiempoRespuesta)
       
       const tiempoEnvio = Date.now() - inicioEnvio
       console.log(`Tiempo de envío: ${tiempoEnvio}ms`)
@@ -391,27 +425,51 @@ export default function SistemaSolicitudes() {
       return
       
     } catch (error: any) {
-      // Reintentos
-      let intento = 1
-      while (intento <= 3) {
+      // 🔥 MEJORA: Registrar el error del primer intento
+      agregarLogReintento(1, 0, '❌ FALLÓ', undefined, error.message)
+      
+      // Reintentos con logs detallados
+      let intento = 2
+      const tiemposEspera = [5000, 15000, 30000]
+      
+      while (intento <= 4) { // 3 reintentos (intentos 2, 3, 4)
+        const tiempoEspera = tiemposEspera[intento - 2]
+        
         try {
-          console.log(`Reintento ${intento}...`)
-          await new Promise(resolve => setTimeout(resolve, [5000, 15000, 30000][intento - 1]))
+          // 🔥 MEJORA: Registrar que estamos esperando antes del reintento
+          agregarLogReintento(intento, tiempoEspera, `⏳ Esperando ${tiempoEspera}ms para reintento...`)
+          
+          await new Promise(resolve => setTimeout(resolve, tiempoEspera))
+          
+          // 🔥 MEJORA: Registrar inicio del reintento
+          agregarLogReintento(intento, tiempoEspera, '🔄 Realizando reintento...')
+          
           const mensajeConfirmacion = generarMensajeConfirmacion(solicitud)
-          await enviarMensajeAPI(mensajeConfirmacion, solicitud.codigoUnico + '-reintento-' + intento)
-          console.log(`Reintento ${intento} exitoso`)
+          const { respuesta, tiempoRespuesta } = await enviarMensajeAPI(mensajeConfirmacion, solicitud.codigoUnico + '-reintento-' + (intento - 1))
+          
+          // 🔥 MEJORA: Registrar éxito del reintento
+          agregarLogReintento(intento, tiempoEspera, '✅ REINTENTO EXITOSO', tiempoRespuesta)
+          
+          console.log(`Reintento ${intento - 1} exitoso`)
           return
-        } catch (errorRetry) {
-          console.error(`Reintento ${intento} fallido:`, errorRetry)
+          
+        } catch (errorRetry: any) {
+          // 🔥 MEJORA: Registrar fallo del reintento
+          agregarLogReintento(intento, tiempoEspera, `❌ REINTENTO FALLIDO`, undefined, errorRetry.message)
+          
+          console.error(`Reintento ${intento - 1} fallido:`, errorRetry)
           intento++
         }
       }
       
-      mostrarMensaje(
-        `Solicitud creada (Código ${solicitud.codigoUnico}), pero no pudimos enviar la confirmación. Intenta revisar el estado en la app.`,
-        'advertencia'
-      )
-      throw error
+      // Si llegamos aquí, todos los reintentos fallaron
+      const tiempoTotal = Date.now() - inicioEnvio
+      const mensajeError = `Solicitud creada (Código ${solicitud.codigoUnico}), pero no pudimos enviar la confirmación después de 3 reintentos. Tiempo total: ${tiempoTotal}ms. Intenta revisar el estado en la app.`
+      
+      agregarLogReintento(0, tiempoTotal, `💥 TODOS LOS REINTENTOS FALLARON`, undefined, mensajeError)
+      
+      mostrarMensaje(mensajeError, 'advertencia')
+      throw new Error(mensajeError)
     }
   }
 
@@ -420,6 +478,7 @@ export default function SistemaSolicitudes() {
     limpiarMensajes()
     setJsonEnviado('')
     setRespuestaServidor('')
+    setLogsReintentos([]) // Limpiar logs anteriores
 
     try {
       // 1. Validaciones iniciales
@@ -454,6 +513,29 @@ export default function SistemaSolicitudes() {
     } finally {
       setProcesando(false)
     }
+  }
+
+  // 🔥 FUNCIÓN MEJORADA: Formatear logs para mostrar
+  const formatearLogsReintentos = (): string => {
+    if (logsReintentos.length === 0) return ''
+    
+    return logsReintentos.map(log => {
+      const tiempo = log.timestamp.toLocaleTimeString()
+      const base = `[${tiempo}] Intento ${log.intento}: ${log.resultado}`
+      const detalles = []
+      
+      if (log.tiempoEspera > 0) {
+        detalles.push(`Espera: ${log.tiempoEspera}ms`)
+      }
+      if (log.tiempoRespuesta) {
+        detalles.push(`Respuesta: ${log.tiempoRespuesta}ms`)
+      }
+      if (log.error) {
+        detalles.push(`Error: ${log.error}`)
+      }
+      
+      return detalles.length > 0 ? `${base} (${detalles.join(', ')})` : base
+    }).join('\n')
   }
 
   // Función para volver - usando window.location.href como en el otro código
@@ -648,6 +730,27 @@ export default function SistemaSolicitudes() {
                 </pre>
               </div>
             )}
+            
+            {/* 🔥 MEJORA: Sección de logs de reintentos */}
+            {logsReintentos.length > 0 && (
+              <div className="form-group" style={{gridColumn: '1 / -1'}}>
+                <label className="form-label">📊 Logs de Reintentos:</label>
+                <div style={{
+                  background: 'rgba(0,0,0,0.3)', 
+                  padding: '1rem', 
+                  borderRadius: '8px', 
+                  overflow: 'auto',
+                  fontSize: '0.85rem',
+                  color: '#e2e8f0',
+                  fontFamily: 'monospace',
+                  whiteSpace: 'pre-wrap',
+                  maxHeight: '300px'
+                }}>
+                  {formatearLogsReintentos()}
+                </div>
+              </div>
+            )}
+
             {respuestaServidor && (
               <div className="form-group" style={{gridColumn: '1 / -1'}}>
                 <label className="form-label">Respuesta del Servidor:</label>
@@ -657,7 +760,10 @@ export default function SistemaSolicitudes() {
                   borderRadius: '8px', 
                   overflow: 'auto',
                   fontSize: '0.9rem',
-                  color: '#e2e8f0'
+                  color: '#e2e8f0',
+                  fontFamily: 'monospace',
+                  whiteSpace: 'pre-wrap',
+                  maxHeight: '300px'
                 }}>
                   {respuestaServidor}
                 </pre>
