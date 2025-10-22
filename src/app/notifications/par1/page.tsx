@@ -1,4 +1,4 @@
-﻿// app/page.tsx - VERSION COMPLETA CON BOTÓN ATRÁS IDÉNTICO
+﻿// app/page.tsx - VERSION CORREGIDA
 "use client"
 
 import { useState, useEffect } from 'react'
@@ -73,9 +73,8 @@ export default function SistemaSolicitudes() {
     trabajaSabado: 'false'
   })
 
-  // Inicializar código único y almacenamiento
+  // SOLO inicializar almacenamiento, NO generar código
   useEffect(() => {
-    generarCodigoUnico()
     inicializarAlmacenamiento()
   }, [])
 
@@ -243,8 +242,11 @@ export default function SistemaSolicitudes() {
     const trabajaSabado = formData.trabajaSabado === 'true'
     const nombreFixer = formData.nombreFixer.trim()
     
+    // 🔥 CORRECCIÓN: Generar código único aquí, solo cuando se prepara la solicitud
+    const codigoGenerado = generarCodigoUnico()
+    
     return {
-      codigoUnico: codigoUnico,
+      codigoUnico: codigoGenerado, // Usar el código recién generado
       region: formData.region,
       numero: formData.numero,
       nombreRequester: formData.nombreRequester,
@@ -264,11 +266,12 @@ export default function SistemaSolicitudes() {
   }
 
   const registrarSolicitud = async (solicitud: Solicitud): Promise<Solicitud> => {
-    // Verificar unicidad del código
+    // Verificar unicidad del código (aunque ahora es menos probable que se repita)
     const solicitudesExistentes: Solicitud[] = JSON.parse(localStorage.getItem(SOLICITUDES_KEY) || '[]')
     const codigoExiste = solicitudesExistentes.some(s => s.codigoUnico === solicitud.codigoUnico)
     
     if (codigoExiste) {
+      // 🔥 CORRECCIÓN: Regenerar código si por alguna razón existe
       const nuevoCodigo = generarCodigoUnico()
       solicitud.codigoUnico = nuevoCodigo
     }
@@ -424,7 +427,7 @@ export default function SistemaSolicitudes() {
         throw new Error('Por favor complete todos los campos requeridos')
       }
 
-      // 2. Preparar datos de la solicitud
+      // 2. Preparar datos de la solicitud (aquí se genera el código único)
       const solicitud = prepararSolicitud()
       
       // 3. Verificar duplicados (solo aplica para solicitudes sin fixer específico)
