@@ -24,6 +24,7 @@ export default function Par3Page() {
   const [clientData, setClientData] = useState<ClientData>(initialClientState);
   const [localLogs, setLocalLogs] = useState<LocalLog[]>([]);
   const [logMessage, setLogMessage] = useState<string>("");
+  const [isSending, setIsSending] = useState<boolean>(false); // Nuevo estado para prevenir múltiples envíos
 
   // Cargar logs locales desde localStorage al iniciar
   useEffect(() => {
@@ -89,7 +90,6 @@ export default function Par3Page() {
 
   const guardarCambio = (id: keyof Fixer) => {
     setEditando(null);
-    // Cambiado a alert nativo
     alert(`Campo actualizado: ${fixer[id]}`);
   };
 
@@ -107,9 +107,11 @@ export default function Par3Page() {
   };
 
   // Función para agregar un nuevo log local
-  const agregarLogLocal = (status: string, titulo: string) => {
+  const agregarLogLocal = (status: string, titulo: string): string => {
+    const logId = Date.now().toString() + Math.random().toString(36).substr(2, 9); // ID único
+    
     const nuevoLog: LocalLog = {
-      id: Date.now().toString(),
+      id: logId,
       status,
       title: titulo,
       fixer: fixer.fixerNombre,
@@ -124,15 +126,37 @@ export default function Par3Page() {
     };
 
     setLocalLogs(prev => [nuevoLog, ...prev].slice(0, 10));
+    return logId; // Devolvemos el ID para poder actualizarlo después
+  };
+
+  // Función para actualizar el estado de un log específico
+  const actualizarLogLocal = (logId: string, nuevoEstado: string, titulo?: string) => {
+    setLocalLogs(prev => 
+      prev.map(log => 
+        log.id === logId 
+          ? { 
+              ...log, 
+              status: nuevoEstado,
+              ...(titulo && { title: titulo })
+            }
+          : log
+      )
+    );
   };
 
   const enviarNotificacion = async () => {
+    // Prevenir múltiples envíos simultáneos
+    if (isSending) {
+      alert("⏳ Ya se está enviando una solicitud, por favor espera...");
+      return;
+    }
+
     const { fixerNombre, fixerProfesion, fixerTelefono } = fixer;
     const { nombreCliente, descripcion, telefonoCliente } = clientData;
     
     const URL_RESPUESTA = "https://tuapp.com/responder-solicitud";
 
-    // Validaciones - cambiadas a alert nativo
+    // Validaciones
     if (!fixerTelefono || fixerTelefono.trim() === "" || fixerTelefono.length !== 11) {
       alert("❌ Error: El campo 'Número Destino' del Fixer es obligatorio y debe tener el formato 591 + 8 dígitos (11 números en total)");
       return;
@@ -148,8 +172,10 @@ export default function Par3Page() {
       return;
     }
 
-    // Agregar log local inmediatamente
-    agregarLogLocal("Enviando", `Solicitud: ${descripcion.substring(0, 30)}...`);
+    setIsSending(true); // Bloquear más envíos
+
+    // Agregar log local inmediatamente con ID único
+    const logId = agregarLogLocal("Enviando", `Solicitud: ${descripcion.substring(0, 30)}...`);
 
     const texto = `¡Hola ${fixerNombre}, el ${fixerProfesion}!
 Nueva solicitud de servicio.
@@ -180,17 +206,10 @@ Por favor, revisa y responde lo antes posible.`;
       });
 
       if (respuesta.ok) {
-        // Cambiado a alert nativo
         alert("✅ Notificación enviada correctamente al Fixer: " + fixerTelefono);
         
-        // Actualizar log local a exitoso
-        setLocalLogs(prev => 
-          prev.map((log, index) => 
-            index === 0 
-              ? { ...log, status: "Completado", title: descripcion }
-              : log
-          )
-        );
+        // Actualizar el log específico usando el ID
+        actualizarLogLocal(logId, "Completado", descripcion);
         
         // Limpiar formulario
         setClientData(initialClientState);
@@ -199,30 +218,20 @@ Por favor, revisa y responde lo antes posible.`;
         const errorText = await respuesta.text();
         console.error("Error response:", errorText);
         
-        setLocalLogs(prev => 
-          prev.map((log, index) => 
-            index === 0 
-              ? { ...log, status: "Fallido" }
-              : log
-          )
-        );
+        // Actualizar el log específico usando el ID
+        actualizarLogLocal(logId, "Fallido");
         
-        // Cambiado a alert nativo
         alert(`❌ Error: El número del Fixer no existe`);
       }
     } catch (error) {
       console.error("Error en la petición:", error);
       
-      setLocalLogs(prev => 
-        prev.map((log, index) => 
-          index === 0 
-            ? { ...log, status: "Error Conexión" }
-            : log
-        )
-      );
+      // Actualizar el log específico usando el ID
+      actualizarLogLocal(logId, "Error Conexión");
       
-      // Cambiado a alert nativo
       alert("⚠️ Error de conexión con el servicio");
+    } finally {
+      setIsSending(false); // Rehabilitar envíos
     }
   };
 
@@ -230,7 +239,6 @@ Por favor, revisa y responde lo antes posible.`;
   const limpiarLogsLocales = () => {
     setLocalLogs([]);
     localStorage.removeItem('servineo-par3-local-logs');
-    // Cambiado a alert nativo
     alert("🗑️ Historial local limpiado");
   };
 
@@ -266,17 +274,6 @@ Por favor, revisa y responde lo antes posible.`;
                 </button>
               )}
             </div>
-
-            {/* Mensaje temporal - eliminado ya que usaremos alerts */}
-            {logMessage && (
-              <div className={`mb-4 p-2 rounded-lg text-sm font-medium text-center ${
-                logMessage.includes("✅") 
-                  ? "bg-[#16A34A]/10 text-[#16A34A] border border-[#16A34A]/30"
-                  : "bg-[#FFC857]/10 text-[#FFC857] border border-[#FFC857]/30"
-              }`}>
-                {logMessage}
-              </div>
-            )}
 
             <div className="max-h-[500px] overflow-y-auto pr-2">
               {localLogs.length === 0 ? (
@@ -426,12 +423,15 @@ Por favor, revisa y responde lo antes posible.`;
 
             <button
               onClick={enviarNotificacion}
-              className="w-full mt-6 py-3 rounded-lg bg-[#2B31E0] text-white font-bold hover:bg-[#2B6AE0] transition duration-300 shadow-sm"
+              disabled={isSending}
+              className={`w-full mt-6 py-3 rounded-lg font-bold transition duration-300 shadow-sm ${
+                isSending 
+                  ? "bg-gray-400 text-gray-200 cursor-not-allowed" 
+                  : "bg-[#2B31E0] text-white hover:bg-[#2B6AE0]"
+              }`}
             >
-              Solicitar
+              {isSending ? "Enviando..." : "Solicitar"}
             </button>
-
-            {/* Eliminado el componente de notificación estilizado */}
           </div>
         </div>
       </div>
