@@ -84,11 +84,11 @@ const LOGS_VERIFICACION_KEY = 'logs_verificacion_duplicados'
 
 export default function SistemaSolicitudes() {
   const router = useRouter()
-  const [codigoUnico, setCodigoUnico] = useState('-')
-  const [estadoSolicitud, setEstadoSolicitud] = useState('-')
-  const [estadoSolicitudPendiente, setEstadoSolicitudPendiente] = useState('') // CAMBIO: Inicialmente vacío
-  const [fechaRegistro, setFechaRegistro] = useState('-')
-  const [fechaEstimada, setFechaEstimada] = useState('-')
+  const [codigoUnico, setCodigoUnico] = useState('-') // CAMBIO: Inicialmente vacío
+  const [estadoSolicitud, setEstadoSolicitud] = useState('-') // CAMBIO: Inicialmente vacío
+  const [estadoSolicitudPendiente, setEstadoSolicitudPendiente] = useState('') // Inicialmente vacío
+  const [fechaRegistro, setFechaRegistro] = useState('-') // CAMBIO: Inicialmente vacío
+  const [fechaEstimada, setFechaEstimada] = useState('-') // CAMBIO: Inicialmente vacío
   const [mensajeSistema, setMensajeSistema] = useState('')
   const [tipoMensaje, setTipoMensaje] = useState('')
   const [procesando, setProcesando] = useState(false)
@@ -96,7 +96,7 @@ export default function SistemaSolicitudes() {
   const [respuestaServidor, setRespuestaServidor] = useState('')
   const [logsReintentos, setLogsReintentos] = useState<LogReintento[]>([])
   const [duplicadoDetectado, setDuplicadoDetectado] = useState<{encontrado: boolean, codigo: string, datos: any} | null>(null)
-  const [solicitudCreada, setSolicitudCreada] = useState(false) // NUEVO: Estado para controlar si se ha creado la solicitud
+  const [solicitudCreada, setSolicitudCreada] = useState(false) // Estado para controlar si se ha creado la solicitud
 
   const [formData, setFormData] = useState<FormData>({
     region: '591',
@@ -190,7 +190,6 @@ export default function SistemaSolicitudes() {
     const timestamp = Date.now().toString(36)
     const random = Math.random().toString(36).substring(2, 11)
     const codigo = `SOL-${timestamp}-${random}`.toUpperCase()
-    setCodigoUnico(codigo)
     return codigo
   }
 
@@ -529,8 +528,7 @@ export default function SistemaSolicitudes() {
       }
     })
     
-    actualizarUI(solicitud)
-    
+    // CAMBIO: No actualizar la UI aquí, solo en enviarMensajes exitoso
     if (solicitud.tieneFixerEspecifico) {
       mostrarMensaje(`Solicitud creada con fixer específico: ${solicitud.nombreFixer}`, 'success', 3000)
     }
@@ -542,11 +540,11 @@ export default function SistemaSolicitudes() {
 
   const actualizarUI = (solicitud: Solicitud): void => {
     setEstadoSolicitud(solicitud.estado)
-    setEstadoSolicitudPendiente(solicitud.estadoSolicitud) // Aquí se actualiza a "Pendiente"
+    setEstadoSolicitudPendiente(solicitud.estadoSolicitud)
     setFechaRegistro(solicitud.fechaRegistroStr)
     setFechaEstimada(solicitud.fechaEstimada)
     setCodigoUnico(solicitud.codigoUnico)
-    setSolicitudCreada(true) // CAMBIO: Marcar que la solicitud se ha creado
+    setSolicitudCreada(true) // Marcar que la solicitud se ha creado
     
     if (solicitud.tieneFixerEspecifico) {
       setEstadoSolicitud(`${solicitud.estado} (Fixer: ${solicitud.nombreFixer})`)
@@ -616,136 +614,140 @@ export default function SistemaSolicitudes() {
   }
 
   // FUNCIÓN MODIFICADA: enviarMensajes con reintentos condicionales
-  // FUNCIÓN CORREGIDA: enviarMensajes con reintentos condicionales
-const enviarMensajes = async (solicitud: Solicitud): Promise<void> => {
-  const inicioEnvio = Date.now()
-  
-  try {
-    // Validar el canal ANTES de intentar el envío
-    const validacionCanal = validarCanal(solicitud.numero)
+  const enviarMensajes = async (solicitud: Solicitud): Promise<void> => {
+    const inicioEnvio = Date.now()
     
-    if (!validacionCanal.valido) {
-      const mensajeError = validacionCanal.error?.mensaje || 'Error de validación del número'
+    try {
+      // Validar el canal ANTES de intentar el envío
+      const validacionCanal = validarCanal(solicitud.numero)
       
-      agregarLogReintento(1, 0, `❌ VALIDACIÓN FALLIDA: ${mensajeError}`)
-      
-      // Si requiere reintentos, LANZAR ERROR para activar el flujo de reintentos
-      if (validacionCanal.requiereReintentos) {
-        agregarLogReintento(1, 0, `⚠️ Número inválido pero se activarán reintentos`)
-        // Lanzar error para que entre en el catch y active los reintentos
-        throw new Error(`Validación fallida: ${mensajeError}`)
-      } else {
-        // No requiere reintentos (errores de WhatsApp)
-        mostrarMensaje(`✅ Solicitud registrada (${solicitud.codigoUnico}), pero ${mensajeError.toLowerCase()}`, 'advertencia')
+      if (!validacionCanal.valido) {
+        const mensajeError = validacionCanal.error?.mensaje || 'Error de validación del número'
         
-        guardarLogVerificacion({
-          timestamp: new Date(),
-          tipo: 'error',
-          codigoSolicitud: solicitud.codigoUnico,
-          nombreFixer: solicitud.nombreFixer || 'Sin fixer específico',
-          servicio: solicitud.servicio,
-          mensaje: `Error de canal: ${mensajeError} - Número: ${solicitud.numero}`,
-          datosComparados: {
-            fixer: solicitud.nombreFixer || 'Sin fixer específico',
+        agregarLogReintento(1, 0, `❌ VALIDACIÓN FALLIDA: ${mensajeError}`)
+        
+        // Si requiere reintentos, LANZAR ERROR para activar el flujo de reintentos
+        if (validacionCanal.requiereReintentos) {
+          agregarLogReintento(1, 0, `⚠️ Número inválido pero se activarán reintentos`)
+          // Lanzar error para que entre en el catch y active los reintentos
+          throw new Error(`Validación fallida: ${mensajeError}`)
+        } else {
+          // No requiere reintentos (errores de WhatsApp)
+          mostrarMensaje(`✅ Solicitud registrada (${solicitud.codigoUnico}), pero ${mensajeError.toLowerCase()}`, 'advertencia')
+          
+          guardarLogVerificacion({
+            timestamp: new Date(),
+            tipo: 'error',
+            codigoSolicitud: solicitud.codigoUnico,
+            nombreFixer: solicitud.nombreFixer || 'Sin fixer específico',
             servicio: solicitud.servicio,
-            nombreCliente: solicitud.nombreRequester
-          }
-        })
-        return // Detener el proceso aquí para errores de WhatsApp
+            mensaje: `Error de canal: ${mensajeError} - Número: ${solicitud.numero}`,
+            datosComparados: {
+              fixer: solicitud.nombreFixer || 'Sin fixer específico',
+              servicio: solicitud.servicio,
+              nombreCliente: solicitud.nombreRequester
+            }
+          })
+          return // Detener el proceso aquí para errores de WhatsApp
+        }
       }
-    }
 
-    // Si el canal es válido, proceder con el envío normal
-    const mensajeConfirmacion = generarMensajeConfirmacion(solicitud)
-    
-    agregarLogReintento(1, 0, 'Iniciando envío...')
-    const { respuesta, tiempoRespuesta } = await enviarMensajeAPI(mensajeConfirmacion, solicitud.codigoUnico)
-    
-    agregarLogReintento(1, 0, '✅ ENVÍO EXITOSO', tiempoRespuesta)
-    
-    const tiempoEnvio = Date.now() - inicioEnvio
-    console.log(`Tiempo de envío: ${tiempoEnvio}ms`)
-    
-    mostrarMensaje('✅ Solicitud registrada y mensaje enviado exitosamente!', 'success')
-    return
-    
-  } catch (error: any) {
-    // MANEJO MEJORADO DE ERRORES CON REINTENTOS CONDICIONALES
-    
-    // Si es un error de validación que requiere reintentos, proceder con reintentos
-    if (error.message.includes('Validación fallida:')) {
-      agregarLogReintento(1, 0, `❌ ERROR VALIDACIÓN: ${error.message}`)
-      // Continuar al flujo de reintentos
-    }
-    else if (error.message.includes('400') || error.message.includes('Bad Request')) {
-      const deteccionError = detectarErrorCanalDesdeRespuesta(error.message)
+      // Si el canal es válido, proceder con el envío normal
+      const mensajeConfirmacion = generarMensajeConfirmacion(solicitud)
       
-      agregarLogReintento(1, 0, `❌ ERROR 400: ${deteccionError.mensaje}`)
+      agregarLogReintento(1, 0, 'Iniciando envío...')
+      const { respuesta, tiempoRespuesta } = await enviarMensajeAPI(mensajeConfirmacion, solicitud.codigoUnico)
       
-      if (!deteccionError.requiereReintentos) {
-        // No requiere reintentos (errores de WhatsApp)
-        mostrarMensaje(`✅ Solicitud registrada (${solicitud.codigoUnico}), pero ${deteccionError.mensaje.toLowerCase()}`, 'advertencia')
-        return
+      agregarLogReintento(1, 0, '✅ ENVÍO EXITOSO', tiempoRespuesta)
+      
+      const tiempoEnvio = Date.now() - inicioEnvio
+      console.log(`Tiempo de envío: ${tiempoEnvio}ms`)
+      
+      // CAMBIO: Actualizar UI solo cuando el envío es exitoso
+      actualizarUI(solicitud)
+      mostrarMensaje('✅ Solicitud registrada y mensaje enviado exitosamente!', 'success')
+      return
+      
+    } catch (error: any) {
+      // MANEJO MEJORADO DE ERRORES CON REINTENTOS CONDICIONALES
+      
+      // Si es un error de validación que requiere reintentos, proceder con reintentos
+      if (error.message.includes('Validación fallida:')) {
+        agregarLogReintento(1, 0, `❌ ERROR VALIDACIÓN: ${error.message}`)
+        // Continuar al flujo de reintentos
       }
-      
-      // Si requiere reintentos, continuar al flujo de reintentos
-      agregarLogReintento(1, 0, `⚠️ Error 400 pero se reintentará`)
-    } else {
-      agregarLogReintento(1, 0, '❌ FALLÓ', undefined, error.message)
-    }
-    
-    // FLUJO DE REINTENTOS (5s, 15s, 30s) - PARA TODOS LOS ERRORES QUE LLEGAN AQUÍ
-    let intento = 2
-    const tiemposEspera = [5000, 15000, 30000]
-    
-    while (intento <= 4) {
-      const tiempoEspera = tiemposEspera[intento - 2]
-      
-      try {
-        agregarLogReintento(intento, tiempoEspera, `⏳ Esperando ${tiempoEspera}ms para reintento...`)
+      else if (error.message.includes('400') || error.message.includes('Bad Request')) {
+        const deteccionError = detectarErrorCanalDesdeRespuesta(error.message)
         
-        await new Promise(resolve => setTimeout(resolve, tiempoEspera))
+        agregarLogReintento(1, 0, `❌ ERROR 400: ${deteccionError.mensaje}`)
         
-        agregarLogReintento(intento, tiempoEspera, '🔄 Realizando reintento...')
-        
-        // En cada reintento, validar nuevamente el canal
-        if (intento === 2) { // Solo en el primer reintento validar
-          const validacionReintento = validarCanal(solicitud.numero)
-          if (!validacionReintento.valido && !validacionReintento.requiereReintentos) {
-            // Si en el reintento detectamos error de WhatsApp, salir
-            agregarLogReintento(intento, tiempoEspera, `❌ CANAL INVÁLIDO EN REINTENTO: ${validacionReintento.error?.mensaje}`)
-            mostrarMensaje(`✅ Solicitud registrada (${solicitud.codigoUnico}), pero ${validacionReintento.error?.mensaje?.toLowerCase()}`, 'advertencia')
-            return
-          }
+        if (!deteccionError.requiereReintentos) {
+          // No requiere reintentos (errores de WhatsApp)
+          mostrarMensaje(`✅ Solicitud registrada (${solicitud.codigoUnico}), pero ${deteccionError.mensaje.toLowerCase()}`, 'advertencia')
+          return
         }
         
-        const mensajeConfirmacion = generarMensajeConfirmacion(solicitud)
-        const { respuesta, tiempoRespuesta } = await enviarMensajeAPI(mensajeConfirmacion, solicitud.codigoUnico + '-reintento-' + (intento - 1))
-        
-        agregarLogReintento(intento, tiempoEspera, '✅ REINTENTO EXITOSO', tiempoRespuesta)
-        
-        console.log(`Reintento ${intento - 1} exitoso`)
-        mostrarMensaje('✅ Solicitud registrada y mensaje enviado exitosamente!', 'success')
-        return
-        
-      } catch (errorRetry: any) {
-        agregarLogReintento(intento, tiempoEspera, `❌ REINTENTO FALLIDO`, undefined, errorRetry.message)
-        
-        console.error(`Reintento ${intento - 1} fallido:`, errorRetry)
-        intento++
+        // Si requiere reintentos, continuar al flujo de reintentos
+        agregarLogReintento(1, 0, `⚠️ Error 400 pero se reintentará`)
+      } else {
+        agregarLogReintento(1, 0, '❌ FALLÓ', undefined, error.message)
       }
+      
+      // FLUJO DE REINTENTOS (5s, 15s, 30s) - PARA TODOS LOS ERRORES QUE LLEGAN AQUÍ
+      let intento = 2
+      const tiemposEspera = [5000, 15000, 30000]
+      
+      while (intento <= 4) {
+        const tiempoEspera = tiemposEspera[intento - 2]
+        
+        try {
+          agregarLogReintento(intento, tiempoEspera, `⏳ Esperando ${tiempoEspera}ms para reintento...`)
+          
+          await new Promise(resolve => setTimeout(resolve, tiempoEspera))
+          
+          agregarLogReintento(intento, tiempoEspera, '🔄 Realizando reintento...')
+          
+          // En cada reintento, validar nuevamente el canal
+          if (intento === 2) { // Solo en el primer reintento validar
+            const validacionReintento = validarCanal(solicitud.numero)
+            if (!validacionReintento.valido && !validacionReintento.requiereReintentos) {
+              // Si en el reintento detectamos error de WhatsApp, salir
+              agregarLogReintento(intento, tiempoEspera, `❌ CANAL INVÁLIDO EN REINTENTO: ${validacionReintento.error?.mensaje}`)
+              mostrarMensaje(`✅ Solicitud registrada (${solicitud.codigoUnico}), pero ${validacionReintento.error?.mensaje?.toLowerCase()}`, 'advertencia')
+              return
+            }
+          }
+          
+          const mensajeConfirmacion = generarMensajeConfirmacion(solicitud)
+          const { respuesta, tiempoRespuesta } = await enviarMensajeAPI(mensajeConfirmacion, solicitud.codigoUnico + '-reintento-' + (intento - 1))
+          
+          agregarLogReintento(intento, tiempoEspera, '✅ REINTENTO EXITOSO', tiempoRespuesta)
+          
+          console.log(`Reintento ${intento - 1} exitoso`)
+          
+          // CAMBIO: Actualizar UI solo cuando el reintento es exitoso
+          actualizarUI(solicitud)
+          mostrarMensaje('✅ Solicitud registrada y mensaje enviado exitosamente!', 'success')
+          return
+          
+        } catch (errorRetry: any) {
+          agregarLogReintento(intento, tiempoEspera, `❌ REINTENTO FALLIDO`, undefined, errorRetry.message)
+          
+          console.error(`Reintento ${intento - 1} fallido:`, errorRetry)
+          intento++
+        }
+      }
+      
+      // Si todos los reintentos fallaron
+      const tiempoTotal = Date.now() - inicioEnvio
+      const mensajeError = `Solicitud creada (Código ${solicitud.codigoUnico}), pero no pudimos enviar la confirmación después de 3 reintentos. Tiempo total: ${tiempoTotal}ms. Intenta revisar el estado en la app.`
+      
+      agregarLogReintento(0, tiempoTotal, `💥 TODOS LOS REINTENTOS FALLARON`, undefined, mensajeError)
+      
+      mostrarMensaje(mensajeError, 'advertencia')
+      throw new Error(mensajeError)
     }
-    
-    // Si todos los reintentos fallaron
-    const tiempoTotal = Date.now() - inicioEnvio
-    const mensajeError = `Solicitud creada (Código ${solicitud.codigoUnico}), pero no pudimos enviar la confirmación después de 3 reintentos. Tiempo total: ${tiempoTotal}ms. Intenta revisar el estado en la app.`
-    
-    agregarLogReintento(0, tiempoTotal, `💥 TODOS LOS REINTENTOS FALLARON`, undefined, mensajeError)
-    
-    mostrarMensaje(mensajeError, 'advertencia')
-    throw new Error(mensajeError)
   }
-}
 
   const procesarSolicitud = async () => {
     setProcesando(true)
@@ -782,7 +784,7 @@ const enviarMensajes = async (solicitud: Solicitud): Promise<void> => {
         return
       }
 
-      // 5. Registrar solicitud
+      // 5. Registrar solicitud (pero NO actualizar UI todavía)
       const solicitudRegistrada = await registrarSolicitud(solicitud)
       
       // 6. Intentar enviar mensajes (manejará internamente los errores de canal y reintentos)
@@ -860,33 +862,72 @@ const enviarMensajes = async (solicitud: Solicitud): Promise<void> => {
 
       {/* Estados del sistema */}
       <div className="status-section">
-        <div className="status-item">
-          <div className="status-label">Código Único</div>
-          <div className="status-value">{codigoUnico}</div>
-        </div>
-        <div className="status-item">
-          <div className="status-label">Estado</div>
-          <div className="status-value">{estadoSolicitud}</div>
-        </div>
+        {/* CAMBIO: Solo mostrar Código Único cuando se haya creado la solicitud */}
+        {solicitudCreada ? (
+          <div className="status-item">
+            <div className="status-label">Código Único</div>
+            <div className="status-value">{codigoUnico}</div>
+          </div>
+        ) : (
+          <div className="status-item">
+            <div className="status-label">Código Único</div>
+            <div className="status-value">-</div>
+          </div>
+        )}
         
-        {/* CAMBIO: Solo mostrar Solicitud cuando se haya creado */}
-        {solicitudCreada && (
+        {/* CAMBIO: Solo mostrar Estado cuando se haya creado la solicitud */}
+        {solicitudCreada ? (
+          <div className="status-item">
+            <div className="status-label">Estado</div>
+            <div className="status-value">{estadoSolicitud}</div>
+          </div>
+        ) : (
+          <div className="status-item">
+            <div className="status-label">Estado</div>
+            <div className="status-value">-</div>
+          </div>
+        )}
+        
+        {/* CAMBIO: Solo mostrar Solicitud cuando se haya creado la solicitud */}
+        {solicitudCreada ? (
           <div className="status-item">
             <div className="status-label">Solicitud</div>
             <div className="status-value" style={{color: '#fbbf24', fontWeight: 'bold'}}>
               {estadoSolicitudPendiente}
             </div>
           </div>
+        ) : (
+          <div className="status-item">
+            <div className="status-label">Solicitud</div>
+            <div className="status-value">-</div>
+          </div>
         )}
         
-        <div className="status-item">
-          <div className="status-label">Fecha Registro</div>
-          <div className="status-value">{fechaRegistro}</div>
-        </div>
-        <div className="status-item">
-          <div className="status-label">Fecha Estimada</div>
-          <div className="status-value">{fechaEstimada}</div>
-        </div>
+        {/* CAMBIO: Solo mostrar Fecha Registro cuando se haya creado la solicitud */}
+        {solicitudCreada ? (
+          <div className="status-item">
+            <div className="status-label">Fecha Registro</div>
+            <div className="status-value">{fechaRegistro}</div>
+          </div>
+        ) : (
+          <div className="status-item">
+            <div className="status-label">Fecha Registro</div>
+            <div className="status-value">-</div>
+          </div>
+        )}
+        
+        {/* CAMBIO: Solo mostrar Fecha Estimada cuando se haya creado la solicitud */}
+        {solicitudCreada ? (
+          <div className="status-item">
+            <div className="status-label">Fecha Estimada</div>
+            <div className="status-value">{fechaEstimada}</div>
+          </div>
+        ) : (
+          <div className="status-item">
+            <div className="status-label">Fecha Estimada</div>
+            <div className="status-value">-</div>
+          </div>
+        )}
       </div>
 
       {/* Mensajes del sistema */}
