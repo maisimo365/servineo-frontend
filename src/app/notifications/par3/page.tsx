@@ -50,7 +50,7 @@ export default function Par3Page() {
   const guardarCambio = (id: keyof Fixer) => {
     setEditando(null);
     // Cambiado a alert nativo
-    alert(Campo actualizado: ${fixer[id]});
+    alert(`Campo actualizado: ${fixer[id]}`);
   };
 
   const handleFixerChange = (id: keyof Fixer, value: string) => {
@@ -100,7 +100,7 @@ export default function Par3Page() {
     }
 
     // Agregar log local inmediatamente
-    agregarLogLocal("Enviando", Solicitud: ${descripcion.substring(0, 30)}...);
+    agregarLogLocal("Enviando", `Solicitud: ${descripcion.substring(0, 30)}...`);
 
     const texto = `¡Hola ${fixerNombre}, el ${fixerProfesion}!
 Nueva solicitud de servicio.
@@ -159,7 +159,7 @@ Por favor, revisa y responde lo antes posible.`;
         );
         
         // Cambiado a alert nativo
-        alert(❌ Error ${respuesta.status}: No se pudo enviar la notificación);
+        alert(`❌ Error ${respuesta.status}: No se pudo enviar la notificación`);
       }
     } catch (error) {
       console.error("Error en la petición:", error);
@@ -173,7 +173,7 @@ Por favor, revisa y responde lo antes posible.`;
       );
       
       // Cambiado a alert nativo
-      alert("⚠ Error de conexión con el servicio");
+      alert("⚠️ Error de conexión con el servicio");
     }
   };
 
@@ -182,7 +182,7 @@ Por favor, revisa y responde lo antes posible.`;
     setLocalLogs([]);
     localStorage.removeItem('servineo-par3-local-logs');
     // Cambiado a alert nativo
-    alert("🗑 Historial local limpiado");
+    alert("🗑️ Historial local limpiado");
   };
 
   return (
@@ -250,7 +250,7 @@ Por favor, revisa y responde lo antes posible.`;
             </div>
             
             <div className="mt-2 text-xs text-[#64748B] text-center">
-              {localLogs.length > 0 && Mostrando ${localLogs.length} servicios locales}
+              {localLogs.length > 0 && `Mostrando ${localLogs.length} servicios locales`}
             </div>
           </div>
 
