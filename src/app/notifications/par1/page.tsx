@@ -1,4 +1,4 @@
-﻿// app/page.tsx - VERSION CORREGIDA
+﻿// app/page.tsx - VERSION CON "SOLICITUD PENDIENTE"
 "use client"
 
 import { useState, useEffect } from 'react'
@@ -33,6 +33,7 @@ interface Solicitud {
   fechaRegistroStr: string
   fechaEstimada: string
   estado: string
+  estadoSolicitud: string // 🔥 NUEVO: Estado específico de la solicitud
   timestampUnico: string
 }
 
@@ -63,6 +64,7 @@ export default function SistemaSolicitudes() {
   const router = useRouter()
   const [codigoUnico, setCodigoUnico] = useState('-')
   const [estadoSolicitud, setEstadoSolicitud] = useState('-')
+  const [estadoSolicitudPendiente, setEstadoSolicitudPendiente] = useState('Pendiente') // 🔥 NUEVO: Estado pendiente
   const [fechaRegistro, setFechaRegistro] = useState('-')
   const [fechaEstimada, setFechaEstimada] = useState('-')
   const [mensajeSistema, setMensajeSistema] = useState('')
@@ -271,6 +273,7 @@ export default function SistemaSolicitudes() {
       fechaRegistroStr: fechaRegistroInfo.formato,
       fechaEstimada: calcularFechaEstimadaRespuesta(fechaRegistroInfo.fechaHora, trabajaSabado),
       estado: 'Creada',
+      estadoSolicitud: 'Pendiente', // 🔥 NUEVO: Estado de solicitud pendiente
       timestampUnico: Date.now() + Math.random().toString(36).substring(2, 11)
     }
   }
@@ -317,6 +320,7 @@ export default function SistemaSolicitudes() {
 
   const actualizarUI = (solicitud: Solicitud): void => {
     setEstadoSolicitud(solicitud.estado)
+    setEstadoSolicitudPendiente(solicitud.estadoSolicitud) // 🔥 NUEVO: Actualizar estado pendiente
     setFechaRegistro(solicitud.fechaRegistroStr)
     setFechaEstimada(solicitud.fechaEstimada)
     setCodigoUnico(solicitud.codigoUnico)
@@ -333,7 +337,8 @@ export default function SistemaSolicitudes() {
   }
 
   const generarMensajeConfirmacion = (solicitud: Solicitud): MensajeAPI => {
-    let mensajeBase = `¡Hola ${solicitud.nombreRequester}!\n✅ Tu solicitud ha sido registrada con éxito.\nCódigo: ${solicitud.codigoUnico}\nEstado: ${solicitud.estado}\nTipo de servicio: ${solicitud.servicio}\nDescripción: ${solicitud.descripcionTruncada}\nFecha y hora de registro: ${solicitud.fechaRegistroStr}\nFecha estimada de respuesta: ${solicitud.fechaEstimada}`
+    // 🔥 MEJORA: Agregar "Solicitud: Pendiente" al mensaje
+    let mensajeBase = `¡Hola ${solicitud.nombreRequester}!\n✅ Tu solicitud ha sido registrada con éxito.\nCódigo: ${solicitud.codigoUnico}\nEstado: ${solicitud.estado}\nTipo de servicio: ${solicitud.servicio}\nDescripción: ${solicitud.descripcionTruncada}\nFecha y hora de registro: ${solicitud.fechaRegistroStr}\nFecha estimada de respuesta: ${solicitud.fechaEstimada}\nSolicitud: ${solicitud.estadoSolicitud}`
     
     // Agregar información del fixer si existe
     if (solicitud.tieneFixerEspecifico) {
@@ -570,6 +575,13 @@ export default function SistemaSolicitudes() {
         <div className="status-item">
           <div className="status-label">Estado</div>
           <div className="status-value">{estadoSolicitud}</div>
+        </div>
+        {/* 🔥 NUEVO: Cuadro de Solicitud Pendiente */}
+        <div className="status-item">
+          <div className="status-label">Solicitud</div>
+          <div className="status-value" style={{color: '#fbbf24', fontWeight: 'bold'}}>
+            {estadoSolicitudPendiente}
+          </div>
         </div>
         <div className="status-item">
           <div className="status-label">Fecha Registro</div>
