@@ -1,4 +1,4 @@
-﻿// app/page.tsx - VERSION CON VALIDACIÓN DE 8 DÍGITOS Y REINTENTOS CONDICIONALES
+﻿// app/page.tsx - VERSION CON LÍMITE DE CARACTERES Y DETALLE DE CÓDIGO ÚNICO
 "use client"
 
 import { useState, useEffect } from 'react'
@@ -70,7 +70,6 @@ interface LogVerificacion {
   }
 }
 
-// NUEVA INTERFACE PARA ERROR DE CANAL
 interface ErrorCanal {
   tipo: 'sin_whatsapp' | 'opt_out' | 'canal_invalido' | 'numero_invalido'
   mensaje: string
@@ -84,11 +83,11 @@ const LOGS_VERIFICACION_KEY = 'logs_verificacion_duplicados'
 
 export default function SistemaSolicitudes() {
   const router = useRouter()
-  const [codigoUnico, setCodigoUnico] = useState('-') // CAMBIO: Inicialmente vacío
-  const [estadoSolicitud, setEstadoSolicitud] = useState('-') // CAMBIO: Inicialmente vacío
-  const [estadoSolicitudPendiente, setEstadoSolicitudPendiente] = useState('') // Inicialmente vacío
-  const [fechaRegistro, setFechaRegistro] = useState('-') // CAMBIO: Inicialmente vacío
-  const [fechaEstimada, setFechaEstimada] = useState('-') // CAMBIO: Inicialmente vacío
+  const [codigoUnico, setCodigoUnico] = useState('-')
+  const [estadoSolicitud, setEstadoSolicitud] = useState('-')
+  const [estadoSolicitudPendiente, setEstadoSolicitudPendiente] = useState('')
+  const [fechaRegistro, setFechaRegistro] = useState('-')
+  const [fechaEstimada, setFechaEstimada] = useState('-')
   const [mensajeSistema, setMensajeSistema] = useState('')
   const [tipoMensaje, setTipoMensaje] = useState('')
   const [procesando, setProcesando] = useState(false)
@@ -96,7 +95,7 @@ export default function SistemaSolicitudes() {
   const [respuestaServidor, setRespuestaServidor] = useState('')
   const [logsReintentos, setLogsReintentos] = useState<LogReintento[]>([])
   const [duplicadoDetectado, setDuplicadoDetectado] = useState<{encontrado: boolean, codigo: string, datos: any} | null>(null)
-  const [solicitudCreada, setSolicitudCreada] = useState(false) // Estado para controlar si se ha creado la solicitud
+  const [solicitudCreada, setSolicitudCreada] = useState(false)
 
   const [formData, setFormData] = useState<FormData>({
     region: '591',
@@ -109,7 +108,12 @@ export default function SistemaSolicitudes() {
     trabajaSabado: 'false'
   })
 
-  // SOLO inicializar almacenamiento, NO generar código
+  const [contadorServicio, setContadorServicio] = useState(0)
+
+  useEffect(() => {
+    setContadorServicio(formData.servicio.length)
+  }, [formData.servicio])
+
   useEffect(() => {
     inicializarAlmacenamiento()
   }, [])
@@ -126,25 +130,21 @@ export default function SistemaSolicitudes() {
     }
   }
 
-  // FUNCIÓN: Guardar log de verificación
   const guardarLogVerificacion = (log: LogVerificacion) => {
     try {
       const logsExistentes: LogVerificacion[] = JSON.parse(localStorage.getItem(LOGS_VERIFICACION_KEY) || '[]')
       logsExistentes.push(log)
       
-      // Mantener solo los últimos 500 logs para optimizar rendimiento
       if (logsExistentes.length > 500) {
         logsExistentes.splice(0, logsExistentes.length - 500)
       }
       
       localStorage.setItem(LOGS_VERIFICACION_KEY, JSON.stringify(logsExistentes))
-      console.log('Log de verificación guardado:', log)
     } catch (error) {
       console.error('Error al guardar log de verificación:', error)
     }
   }
 
-  // FUNCIÓN MEJORADA: Verificar duplicados por fixer y servicio
   const verificarDuplicadoFixerServicio = (nombreFixer: string, servicio: string): {encontrado: boolean, codigo: string, solicitud: Solicitud | null} => {
     if (!nombreFixer || nombreFixer.trim() === '') {
       return { encontrado: false, codigo: '', solicitud: null }
@@ -153,7 +153,6 @@ export default function SistemaSolicitudes() {
     const solicitudesExistentes: Solicitud[] = JSON.parse(localStorage.getItem(SOLICITUDES_KEY) || '[]')
     const ultimas24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000)
     
-    // Buscar solicitudes con el mismo fixer y servicio en las últimas 24 horas
     const duplicado = solicitudesExistentes.find((solicitud: Solicitud) => {
       const mismaFecha = new Date(solicitud.fechaRegistro) > ultimas24Horas
       const mismoFixer = solicitud.nombreFixer?.toLowerCase().trim() === nombreFixer.toLowerCase().trim()
@@ -162,7 +161,6 @@ export default function SistemaSolicitudes() {
       return mismaFecha && mismoFixer && mismoServicio
     })
 
-    // Guardar log de la verificación
     guardarLogVerificacion({
       timestamp: new Date(),
       tipo: duplicado ? 'verificacion_duplicado' : 'registro_exitoso',
@@ -189,8 +187,7 @@ export default function SistemaSolicitudes() {
   const generarCodigoUnico = (): string => {
     const timestamp = Date.now().toString(36)
     const random = Math.random().toString(36).substring(2, 11)
-    const codigo = `SOL-${timestamp}-${random}`.toUpperCase()
-    return codigo
+    return `SOL-${timestamp}-${random}`.toUpperCase()
   }
 
   const obtenerFechaHoraRegistro = (): FechaHoraRegistro => {
@@ -240,12 +237,9 @@ export default function SistemaSolicitudes() {
     return descripcion.substring(0, maxLength) + '...'
   }
 
-  // FUNCIÓN MODIFICADA: Validar canal WhatsApp SOLO para números de 8 dígitos
   const validarCanal = (numero: string): {valido: boolean, error?: ErrorCanal, requiereReintentos?: boolean} => {
-    // Limpiar número (solo dígitos)
     const numeroLimpio = numero.replace(/\D/g, '')
     
-    // Casos que ACTIVAN REINTENTOS
     if (!numeroLimpio || numeroLimpio.trim() === '') {
       return {
         valido: false,
@@ -254,7 +248,7 @@ export default function SistemaSolicitudes() {
           mensaje: 'Número no puede estar vacío',
           numero: numero
         },
-        requiereReintentos: true // ✅ ACTIVA REINTENTOS
+        requiereReintentos: true
       }
     }
     
@@ -266,7 +260,7 @@ export default function SistemaSolicitudes() {
           mensaje: 'Número debe tener al menos 8 dígitos',
           numero: numero
         },
-        requiereReintentos: true // ✅ ACTIVA REINTENTOS
+        requiereReintentos: true
       }
     }
     
@@ -278,13 +272,11 @@ export default function SistemaSolicitudes() {
           mensaje: 'Número no puede tener más de 8 dígitos',
           numero: numero
         },
-        requiereReintentos: true // ✅ ACTIVA REINTENTOS
+        requiereReintentos: true
       }
     }
     
-    // SOLO para números de exactamente 8 dígitos: validar WhatsApp
     if (numeroLimpio.length === 8) {
-      // Simulación de detección de números sin WhatsApp
       const numerosSinWhatsApp = ['77480958', '77400598', '77400998', '77400508']
       
       if (numerosSinWhatsApp.includes(numeroLimpio)) {
@@ -295,7 +287,7 @@ export default function SistemaSolicitudes() {
             mensaje: 'El contacto no permite este canal',
             numero: numeroLimpio
           },
-          requiereReintentos: false // ❌ NO ACTIVA REINTENTOS
+          requiereReintentos: false
         }
       }
       
@@ -308,19 +300,17 @@ export default function SistemaSolicitudes() {
             mensaje: 'Número sin WhatsApp',
             numero: numeroLimpio
           },
-          requiereReintentos: false // ❌ NO ACTIVA REINTENTOS
+          requiereReintentos: false
         }
       }
     }
     
-    // Número válido de 8 dígitos con WhatsApp
     return { 
       valido: true,
-      requiereReintentos: true // ✅ ACTIVA REINTENTOS para envío normal
+      requiereReintentos: true
     }
   }
 
-  // FUNCIÓN: Detectar errores de canal desde respuesta
   const detectarErrorCanalDesdeRespuesta = (respuestaError: string): {mensaje: string, requiereReintentos: boolean} => {
     if (respuestaError.includes('exists') && respuestaError.includes('false')) {
       return {
@@ -343,7 +333,6 @@ export default function SistemaSolicitudes() {
       }
     }
     
-    // Para otros errores 400, activar reintentos
     return {
       mensaje: 'Error en el envío del mensaje',
       requiereReintentos: true
@@ -352,12 +341,21 @@ export default function SistemaSolicitudes() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { id, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [id]: value
-    }))
+    
+    if (id === 'servicio') {
+      if (value.length <= 30) {
+        setFormData(prev => ({
+          ...prev,
+          [id]: value
+        }))
+      }
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [id]: value
+      }))
+    }
 
-    // Verificar duplicados en tiempo real cuando se modifica fixer o servicio
     if ((id === 'nombreFixer' || id === 'servicio') && value.trim() !== '') {
       const nombreFixer = id === 'nombreFixer' ? value : formData.nombreFixer
       const servicio = id === 'servicio' ? value : formData.servicio
@@ -395,7 +393,6 @@ export default function SistemaSolicitudes() {
     setDuplicadoDetectado(null)
   }
 
-  // FUNCIONES DE VERIFICACIÓN DE DUPLICADOS ORIGINAL
   const calcularSimilitud = (str1: string, str2: string): number => {
     if (str1.length === 0 && str2.length === 0) return 1.0;
     const longer = str1.length > str2.length ? str1 : str2;
@@ -436,7 +433,6 @@ export default function SistemaSolicitudes() {
     const ultimas24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000)
     const solicitudesRecientes = JSON.parse(localStorage.getItem(ULTIMAS_SOLICITUDES_KEY) || '[]')
     
-    // Si hay un fixer específico, aplicar la nueva verificación
     if (solicitud.nombreFixer && solicitud.nombreFixer.trim() !== '') {
       const resultado = verificarDuplicadoFixerServicio(solicitud.nombreFixer, solicitud.servicio)
       if (resultado.encontrado) {
@@ -445,7 +441,6 @@ export default function SistemaSolicitudes() {
       return null
     }
     
-    // Verificación original para solicitudes sin fixer específico
     return solicitudesRecientes.find((s: Solicitud) => 
       s.nombreRequester === solicitud.nombreRequester &&
       s.servicio === solicitud.servicio &&
@@ -513,7 +508,6 @@ export default function SistemaSolicitudes() {
     
     localStorage.setItem(ULTIMAS_SOLICITUDES_KEY, JSON.stringify(ultimasSolicitudes))
     
-    // Guardar log de registro exitoso
     guardarLogVerificacion({
       timestamp: new Date(),
       tipo: 'registro_exitoso',
@@ -613,12 +607,10 @@ export default function SistemaSolicitudes() {
     }
   }
 
-  // FUNCIÓN MODIFICADA: enviarMensajes con reintentos condicionales
   const enviarMensajes = async (solicitud: Solicitud): Promise<void> => {
     const inicioEnvio = Date.now()
     
     try {
-      // Validar el canal ANTES de intentar el envío
       const validacionCanal = validarCanal(solicitud.numero)
       
       if (!validacionCanal.valido) {
@@ -626,13 +618,10 @@ export default function SistemaSolicitudes() {
         
         agregarLogReintento(1, 0, `❌ VALIDACIÓN FALLIDA: ${mensajeError}`)
         
-        // Si requiere reintentos, LANZAR ERROR para activar el flujo de reintentos
         if (validacionCanal.requiereReintentos) {
           agregarLogReintento(1, 0, `⚠️ Número inválido pero se activarán reintentos`)
-          // Lanzar error para que entre en el catch y active los reintentos
           throw new Error(`Validación fallida: ${mensajeError}`)
         } else {
-          // No requiere reintentos (errores de WhatsApp)
           mostrarMensaje(`✅ Solicitud registrada (${solicitud.codigoUnico}), pero ${mensajeError.toLowerCase()}`, 'advertencia')
           
           guardarLogVerificacion({
@@ -648,11 +637,10 @@ export default function SistemaSolicitudes() {
               nombreCliente: solicitud.nombreRequester
             }
           })
-          return // Detener el proceso aquí para errores de WhatsApp
+          return
         }
       }
 
-      // Si el canal es válido, proceder con el envío normal
       const mensajeConfirmacion = generarMensajeConfirmacion(solicitud)
       
       agregarLogReintento(1, 0, 'Iniciando envío...')
@@ -669,12 +657,8 @@ export default function SistemaSolicitudes() {
       return
       
     } catch (error: any) {
-      // MANEJO MEJORADO DE ERRORES CON REINTENTOS CONDICIONALES
-      
-      // Si es un error de validación que requiere reintentos, proceder con reintentos
       if (error.message.includes('Validación fallida:')) {
         agregarLogReintento(1, 0, `❌ ERROR VALIDACIÓN: ${error.message}`)
-        // Continuar al flujo de reintentos
       }
       else if (error.message.includes('400') || error.message.includes('Bad Request')) {
         const deteccionError = detectarErrorCanalDesdeRespuesta(error.message)
@@ -682,18 +666,15 @@ export default function SistemaSolicitudes() {
         agregarLogReintento(1, 0, `❌ ERROR 400: ${deteccionError.mensaje}`)
         
         if (!deteccionError.requiereReintentos) {
-          // No requiere reintentos (errores de WhatsApp)
           mostrarMensaje(`✅ Solicitud registrada (${solicitud.codigoUnico}), pero ${deteccionError.mensaje.toLowerCase()}`, 'advertencia')
           return
         }
         
-        // Si requiere reintentos, continuar al flujo de reintentos
         agregarLogReintento(1, 0, `⚠️ Error 400 pero se reintentará`)
       } else {
         agregarLogReintento(1, 0, '❌ FALLÓ', undefined, error.message)
       }
       
-      // FLUJO DE REINTENTOS (5s, 15s, 30s) - PARA TODOS LOS ERRORES QUE LLEGAN AQUÍ
       let intento = 2
       const tiemposEspera = [5000, 15000, 30000]
       
@@ -707,11 +688,9 @@ export default function SistemaSolicitudes() {
           
           agregarLogReintento(intento, tiempoEspera, '🔄 Realizando reintento...')
           
-          // En cada reintento, validar nuevamente el canal
-          if (intento === 2) { // Solo en el primer reintento validar
+          if (intento === 2) {
             const validacionReintento = validarCanal(solicitud.numero)
             if (!validacionReintento.valido && !validacionReintento.requiereReintentos) {
-              // Si en el reintento detectamos error de WhatsApp, salir
               agregarLogReintento(intento, tiempoEspera, `❌ CANAL INVÁLIDO EN REINTENTO: ${validacionReintento.error?.mensaje}`)
               mostrarMensaje(`✅ Solicitud registrada (${solicitud.codigoUnico}), pero ${validacionReintento.error?.mensaje?.toLowerCase()}`, 'advertencia')
               return
@@ -723,8 +702,6 @@ export default function SistemaSolicitudes() {
           
           agregarLogReintento(intento, tiempoEspera, '✅ REINTENTO EXITOSO', tiempoRespuesta)
           
-          console.log(`Reintento ${intento - 1} exitoso`)
-          
           // CAMBIO: Actualizar UI solo cuando el reintento es exitoso
           actualizarUI(solicitud)
           mostrarMensaje('✅ Solicitud registrada y mensaje enviado exitosamente!', 'success')
@@ -732,13 +709,10 @@ export default function SistemaSolicitudes() {
           
         } catch (errorRetry: any) {
           agregarLogReintento(intento, tiempoEspera, `❌ REINTENTO FALLIDO`, undefined, errorRetry.message)
-          
-          console.error(`Reintento ${intento - 1} fallido:`, errorRetry)
           intento++
         }
       }
       
-      // Si todos los reintentos fallaron
       const tiempoTotal = Date.now() - inicioEnvio
       const mensajeError = `Solicitud creada (Código ${solicitud.codigoUnico}), pero no pudimos enviar la confirmación después de 3 reintentos. Tiempo total: ${tiempoTotal}ms. Intenta revisar el estado en la app.`
       
@@ -757,12 +731,10 @@ export default function SistemaSolicitudes() {
     setLogsReintentos([])
 
     try {
-      // 1. Validaciones iniciales
       if (!validarDatos()) {
         throw new Error('Por favor complete todos los campos requeridos')
       }
 
-      // 2. Verificación específica por fixer y servicio
       if (formData.nombreFixer.trim() !== '') {
         const resultadoDuplicado = verificarDuplicadoFixerServicio(formData.nombreFixer, formData.servicio)
         if (resultadoDuplicado.encontrado) {
@@ -770,10 +742,8 @@ export default function SistemaSolicitudes() {
         }
       }
 
-      // 3. Preparar datos de la solicitud
       const solicitud = prepararSolicitud()
       
-      // 4. Verificar duplicados (para casos sin fixer específico)
       const duplicado = verificarDuplicados(solicitud)
       if (duplicado) {
         mostrarMensaje(
@@ -784,10 +754,8 @@ export default function SistemaSolicitudes() {
         return
       }
 
-      // 5. Registrar solicitud (pero NO actualizar UI todavía)
       const solicitudRegistrada = await registrarSolicitud(solicitud)
       
-      // 6. Intentar enviar mensajes (manejará internamente los errores de canal y reintentos)
       await enviarMensajes(solicitudRegistrada)
       
     } catch (error: any) {
@@ -825,7 +793,6 @@ export default function SistemaSolicitudes() {
 
   return (
     <div className="container" style={{position: 'relative'}}>
-      {/* Botón Atrás */}
       <button
         onClick={goBack}
         className="absolute top-6 left-6 p-3 bg-[#2B3FE0] text-[#2BD0F0] rounded-xl hover:bg-[#1AA7ED] hover:text-white transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 z-10"
@@ -835,13 +802,11 @@ export default function SistemaSolicitudes() {
         <span className="font-semibold text-lg">Atrás</span>
       </button>
 
-      {/* Header */}
       <div className="header" style={{marginTop: '80px'}}>
         <h1 className="main-title">Sistema de Solicitudes</h1>
         <p className="subtitle">Gestiona solicitudes y comunica con los Fixers fácilmente</p>
       </div>
 
-      {/* Alerta de duplicado detectado en tiempo real */}
       {duplicadoDetectado && duplicadoDetectado.encontrado && (
         <div className="system-message message-advertencia" style={{
           display: 'flex',
@@ -860,9 +825,8 @@ export default function SistemaSolicitudes() {
         </div>
       )}
 
-      {/* Estados del sistema */}
       <div className="status-section">
-        {/* CAMBIO: Solo mostrar Código Único cuando se haya creado la solicitud */}
+        {/* DETALLE MEJORADO: Solo mostrar Código Único cuando se haya creado la solicitud */}
         {solicitudCreada ? (
           <div className="status-item">
             <div className="status-label">Código Único</div>
@@ -875,7 +839,7 @@ export default function SistemaSolicitudes() {
           </div>
         )}
         
-        {/* CAMBIO: Solo mostrar Estado cuando se haya creado la solicitud */}
+        {/* DETALLE MEJORADO: Solo mostrar Estado cuando se haya creado la solicitud */}
         {solicitudCreada ? (
           <div className="status-item">
             <div className="status-label">Estado</div>
@@ -888,7 +852,7 @@ export default function SistemaSolicitudes() {
           </div>
         )}
         
-        {/* CAMBIO: Solo mostrar Solicitud cuando se haya creado la solicitud */}
+        {/* DETALLE MEJORADO: Solo mostrar Solicitud cuando se haya creado la solicitud */}
         {solicitudCreada ? (
           <div className="status-item">
             <div className="status-label">Solicitud</div>
@@ -903,7 +867,7 @@ export default function SistemaSolicitudes() {
           </div>
         )}
         
-        {/* CAMBIO: Solo mostrar Fecha Registro cuando se haya creado la solicitud */}
+        {/* DETALLE MEJORADO: Solo mostrar Fecha Registro cuando se haya creado la solicitud */}
         {solicitudCreada ? (
           <div className="status-item">
             <div className="status-label">Fecha Registro</div>
@@ -916,7 +880,7 @@ export default function SistemaSolicitudes() {
           </div>
         )}
         
-        {/* CAMBIO: Solo mostrar Fecha Estimada cuando se haya creado la solicitud */}
+        {/* DETALLE MEJORADO: Solo mostrar Fecha Estimada cuando se haya creado la solicitud */}
         {solicitudCreada ? (
           <div className="status-item">
             <div className="status-label">Fecha Estimada</div>
@@ -930,14 +894,12 @@ export default function SistemaSolicitudes() {
         )}
       </div>
 
-      {/* Mensajes del sistema */}
       {mensajeSistema && (
         <div className={`system-message message-${tipoMensaje}`}>
           {mensajeSistema}
         </div>
       )}
 
-      {/* Formulario de datos del requester */}
       <div className="glass-card">
         <h2 className="card-title">📋 Datos del Requester</h2>
         <div className="form-grid">
@@ -964,8 +926,7 @@ export default function SistemaSolicitudes() {
               required
             />
             <small style={{color: '#94a3b8', fontSize: '0.8rem', marginTop: '5px'}}> 
-              <br />
-              <br />
+              ⚠️ Debe tener exactamente 8 dígitos
             </small>
           </div>
           <div className="form-group" style={{gridColumn: '1 / -1'}}>
@@ -999,9 +960,28 @@ export default function SistemaSolicitudes() {
               value={formData.servicio}
               onChange={handleInputChange}
               className="form-input"
-              placeholder="Descripción del servicio requerido"
+              placeholder="Descripción del servicio requerido (máx. 30 caracteres)"
+              maxLength={30}
               required
             />
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginTop: '5px',
+              fontSize: '0.8rem'
+            }}>
+              <span style={{
+                color: contadorServicio >= 30 ? '#ef4444' : '#94a3b8'
+              }}>
+               
+              </span>
+              {contadorServicio >= 30 && (
+                <span style={{color: '#ef4444', fontWeight: 'bold'}}>
+                  ⚠️ Límite alcanzado
+                </span>
+              )}
+            </div>
           </div>
           <div className="form-group" style={{gridColumn: '1 / -1'}}>
             <label className="form-label">Mensaje Adicional *</label>
@@ -1019,7 +999,6 @@ export default function SistemaSolicitudes() {
         </div>
       </div>
 
-      {/* Información del Fixer */}
       <div className="glass-card">
         <h2 className="card-title">👨‍💼 Datos del Fixer</h2>
         <div className="form-grid">
@@ -1034,7 +1013,7 @@ export default function SistemaSolicitudes() {
               placeholder="Dejar vacío para asignación automática"
             />
             <small style={{color: '#94a3b8', fontSize: '0.8rem', marginTop: '5px'}}>
-              ⚠️ Si asignas un fixer específico, se verificará por duplicados de fixer y servicio
+              
             </small>
           </div>
           <div className="form-group">
@@ -1052,7 +1031,6 @@ export default function SistemaSolicitudes() {
         </div>
       </div>
 
-      {/* Botón de acción */}
       <div style={{textAlign: 'center', marginTop: '2rem'}}>
         <button 
           onClick={procesarSolicitud}
@@ -1064,7 +1042,6 @@ export default function SistemaSolicitudes() {
         </button>
       </div>
 
-      {/* Debug información - JSON enviado y respuesta */}
       {(jsonEnviado || respuestaServidor) && (
         <div className="glass-card">
           <h2 className="card-title">🔧 Información de Debug</h2>
