@@ -348,6 +348,8 @@ ${solicitud.urlSolicitud}`;
 
   // Función para guardar edición (incluyendo datos del fixer)
   const guardarEdicion = () => {
+    if (!editandoSolicitud) return;
+
     if (!validarNumero(formEdicion.numero)) {
       mostrarAlerta('error', '❌ Número del cliente inválido. Solo números (máx 8 dígitos)');
       return;
@@ -372,6 +374,26 @@ ${solicitud.urlSolicitud}`;
       mostrarAlerta('error', '❌ URL de solicitud es obligatoria');
       return;
     }
+  const mismoCodigoPais = formEdicion.codigoPais.trim() === editandoSolicitud.codigoPais.trim();
+  const mismoNumero = formEdicion.numero.trim() === editandoSolicitud.numero.trim();
+  const mismaUrl = formEdicion.urlSolicitud.trim() === editandoSolicitud.urlSolicitud.trim();
+  const mismoFixerCodigo = formEdicion.fixerCodigoPais.trim() === editandoSolicitud.fixer.codigoPais.trim();
+  const mismoFixerNumero = formEdicion.fixerNumero.trim() === editandoSolicitud.fixer.numero.trim();
+
+  const sinCambios = (
+    mismoCodigoPais &&
+    mismoNumero &&
+    mismaUrl &&
+    mismoFixerCodigo &&
+    mismoFixerNumero
+  );
+
+  if (sinCambios) {
+    mostrarAlerta('error', '⚠️ No se detectaron cambios para guardar');
+    setModalEdicionVisible(false);
+    setEditandoSolicitud(null);
+    return;
+  }
 
     setSolicitudes(prev => 
       prev.map(s => 
@@ -423,6 +445,7 @@ ${solicitud.urlSolicitud}`;
     }
 
     setModalLoading(true);
+    closeModal();
 
     // 1️⃣ Crear el texto según el estado
     let texto = '';
