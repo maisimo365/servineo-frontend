@@ -86,7 +86,7 @@ export default function SistemaSolicitudes() {
   const router = useRouter()
   const [codigoUnico, setCodigoUnico] = useState('-')
   const [estadoSolicitud, setEstadoSolicitud] = useState('-')
-  const [estadoSolicitudPendiente, setEstadoSolicitudPendiente] = useState('Pendiente')
+  const [estadoSolicitudPendiente, setEstadoSolicitudPendiente] = useState('') // CAMBIO: Inicialmente vacío
   const [fechaRegistro, setFechaRegistro] = useState('-')
   const [fechaEstimada, setFechaEstimada] = useState('-')
   const [mensajeSistema, setMensajeSistema] = useState('')
@@ -96,6 +96,7 @@ export default function SistemaSolicitudes() {
   const [respuestaServidor, setRespuestaServidor] = useState('')
   const [logsReintentos, setLogsReintentos] = useState<LogReintento[]>([])
   const [duplicadoDetectado, setDuplicadoDetectado] = useState<{encontrado: boolean, codigo: string, datos: any} | null>(null)
+  const [solicitudCreada, setSolicitudCreada] = useState(false) // NUEVO: Estado para controlar si se ha creado la solicitud
 
   const [formData, setFormData] = useState<FormData>({
     region: '591',
@@ -541,10 +542,11 @@ export default function SistemaSolicitudes() {
 
   const actualizarUI = (solicitud: Solicitud): void => {
     setEstadoSolicitud(solicitud.estado)
-    setEstadoSolicitudPendiente(solicitud.estadoSolicitud)
+    setEstadoSolicitudPendiente(solicitud.estadoSolicitud) // Aquí se actualiza a "Pendiente"
     setFechaRegistro(solicitud.fechaRegistroStr)
     setFechaEstimada(solicitud.fechaEstimada)
     setCodigoUnico(solicitud.codigoUnico)
+    setSolicitudCreada(true) // CAMBIO: Marcar que la solicitud se ha creado
     
     if (solicitud.tieneFixerEspecifico) {
       setEstadoSolicitud(`${solicitud.estado} (Fixer: ${solicitud.nombreFixer})`)
@@ -866,12 +868,17 @@ const enviarMensajes = async (solicitud: Solicitud): Promise<void> => {
           <div className="status-label">Estado</div>
           <div className="status-value">{estadoSolicitud}</div>
         </div>
-        <div className="status-item">
-          <div className="status-label">Solicitud</div>
-          <div className="status-value" style={{color: '#fbbf24', fontWeight: 'bold'}}>
-            {estadoSolicitudPendiente}
+        
+        {/* CAMBIO: Solo mostrar Solicitud cuando se haya creado */}
+        {solicitudCreada && (
+          <div className="status-item">
+            <div className="status-label">Solicitud</div>
+            <div className="status-value" style={{color: '#fbbf24', fontWeight: 'bold'}}>
+              {estadoSolicitudPendiente}
+            </div>
           </div>
-        </div>
+        )}
+        
         <div className="status-item">
           <div className="status-label">Fecha Registro</div>
           <div className="status-value">{fechaRegistro}</div>
