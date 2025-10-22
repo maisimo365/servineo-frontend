@@ -1,11 +1,11 @@
-﻿// app/page.tsx - VERSION CON "SOLICITUD PENDIENTE"
+﻿// app/page.tsx - VERSION CON VERIFICACIÓN DE FIXER Y SERVICIO DUPLICADO
 "use client"
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { FaArrowLeft } from 'react-icons/fa'
+import { FaArrowLeft, FaExclamationTriangle } from 'react-icons/fa'
 
-// Interfaces y tipos
+// Interfaces y tipos (AGREGAR NUEVA INTERFACE)
 interface FormData {
   region: string
   numero: string
@@ -33,7 +33,7 @@ interface Solicitud {
   fechaRegistroStr: string
   fechaEstimada: string
   estado: string
-  estadoSolicitud: string // 🔥 NUEVO: Estado específico de la solicitud
+  estadoSolicitud: string
   timestampUnico: string
 }
 
@@ -56,15 +56,31 @@ interface LogReintento {
   error?: string
 }
 
-// Constantes
+// 🔥 NUEVA INTERFACE PARA LOG DE VERIFICACIÓN
+interface LogVerificacion {
+  timestamp: Date
+  tipo: 'verificacion_duplicado' | 'registro_exitoso' | 'error'
+  codigoSolicitud: string
+  nombreFixer: string
+  servicio: string
+  mensaje: string
+  datosComparados: {
+    fixer: string
+    servicio: string
+    nombreCliente: string
+  }
+}
+
+// Constantes (AGREGAR NUEVA CONSTANTE)
 const SOLICITUDES_KEY = 'solicitudes_registradas'
 const ULTIMAS_SOLICITUDES_KEY = 'ultimas_solicitudes'
+const LOGS_VERIFICACION_KEY = 'logs_verificacion_duplicados' // 🔥 NUEVO: Key para logs
 
 export default function SistemaSolicitudes() {
   const router = useRouter()
   const [codigoUnico, setCodigoUnico] = useState('-')
   const [estadoSolicitud, setEstadoSolicitud] = useState('-')
-  const [estadoSolicitudPendiente, setEstadoSolicitudPendiente] = useState('Pendiente') // 🔥 NUEVO: Estado pendiente
+  const [estadoSolicitudPendiente, setEstadoSolicitudPendiente] = useState('Pendiente')
   const [fechaRegistro, setFechaRegistro] = useState('-')
   const [fechaEstimada, setFechaEstimada] = useState('-')
   const [mensajeSistema, setMensajeSistema] = useState('')
@@ -73,6 +89,7 @@ export default function SistemaSolicitudes() {
   const [jsonEnviado, setJsonEnviado] = useState('')
   const [respuestaServidor, setRespuestaServidor] = useState('')
   const [logsReintentos, setLogsReintentos] = useState<LogReintento[]>([])
+  const [duplicadoDetectado, setDuplicadoDetectado] = useState<{encontrado: boolean, codigo: string, datos: any} | null>(null) // 🔥 NUEVO: Estado para duplicado
 
   const [formData, setFormData] = useState<FormData>({
     region: '591',
@@ -96,6 +113,69 @@ export default function SistemaSolicitudes() {
     }
     if (!localStorage.getItem(ULTIMAS_SOLICITUDES_KEY)) {
       localStorage.setItem(ULTIMAS_SOLICITUDES_KEY, JSON.stringify([]))
+    }
+    if (!localStorage.getItem(LOGS_VERIFICACION_KEY)) { // 🔥 NUEVO: Inicializar logs
+      localStorage.setItem(LOGS_VERIFICACION_KEY, JSON.stringify([]))
+    }
+  }
+
+  // 🔥 NUEVA FUNCIÓN: Guardar log de verificación
+  const guardarLogVerificacion = (log: LogVerificacion) => {
+    try {
+      const logsExistentes: LogVerificacion[] = JSON.parse(localStorage.getItem(LOGS_VERIFICACION_KEY) || '[]')
+      logsExistentes.push(log)
+      
+      // Mantener solo los últimos 500 logs para optimizar rendimiento
+      if (logsExistentes.length > 500) {
+        logsExistentes.splice(0, logsExistentes.length - 500)
+      }
+      
+      localStorage.setItem(LOGS_VERIFICACION_KEY, JSON.stringify(logsExistentes))
+      console.log('Log de verificación guardado:', log)
+    } catch (error) {
+      console.error('Error al guardar log de verificación:', error)
+    }
+  }
+
+  // 🔥 NUEVA FUNCIÓN MEJORADA: Verificar duplicados por fixer y servicio
+  const verificarDuplicadoFixerServicio = (nombreFixer: string, servicio: string): {encontrado: boolean, codigo: string, solicitud: Solicitud | null} => {
+    if (!nombreFixer || nombreFixer.trim() === '') {
+      return { encontrado: false, codigo: '', solicitud: null }
+    }
+
+    const solicitudesExistentes: Solicitud[] = JSON.parse(localStorage.getItem(SOLICITUDES_KEY) || '[]')
+    const ultimas24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    
+    // Buscar solicitudes con el mismo fixer y servicio en las últimas 24 horas
+    const duplicado = solicitudesExistentes.find((solicitud: Solicitud) => {
+      const mismaFecha = new Date(solicitud.fechaRegistro) > ultimas24Horas
+      const mismoFixer = solicitud.nombreFixer?.toLowerCase().trim() === nombreFixer.toLowerCase().trim()
+      const mismoServicio = solicitud.servicio.toLowerCase().trim() === servicio.toLowerCase().trim()
+      
+      return mismaFecha && mismoFixer && mismoServicio
+    })
+
+    // Guardar log de la verificación
+    guardarLogVerificacion({
+      timestamp: new Date(),
+      tipo: duplicado ? 'verificacion_duplicado' : 'registro_exitoso',
+      codigoSolicitud: duplicado?.codigoUnico || 'N/A',
+      nombreFixer: nombreFixer,
+      servicio: servicio,
+      mensaje: duplicado 
+        ? `Se detectó duplicado con código: ${duplicado.codigoUnico}`
+        : 'No se encontraron duplicados',
+      datosComparados: {
+        fixer: nombreFixer,
+        servicio: servicio,
+        nombreCliente: formData.nombreRequester
+      }
+    })
+
+    return {
+      encontrado: !!duplicado,
+      codigo: duplicado?.codigoUnico || '',
+      solicitud: duplicado || null
     }
   }
 
@@ -160,6 +240,25 @@ export default function SistemaSolicitudes() {
       ...prev,
       [id]: value
     }))
+
+    // 🔥 NUEVO: Verificar duplicados en tiempo real cuando se modifica fixer o servicio
+    if ((id === 'nombreFixer' || id === 'servicio') && value.trim() !== '') {
+      const nombreFixer = id === 'nombreFixer' ? value : formData.nombreFixer
+      const servicio = id === 'servicio' ? value : formData.servicio
+      
+      if (nombreFixer.trim() !== '' && servicio.trim() !== '') {
+        const resultado = verificarDuplicadoFixerServicio(nombreFixer, servicio)
+        if (resultado.encontrado) {
+          setDuplicadoDetectado({
+            encontrado: true,
+            codigo: resultado.codigo,
+            datos: resultado.solicitud
+          })
+        } else {
+          setDuplicadoDetectado(null)
+        }
+      }
+    }
   }
 
   const mostrarMensaje = (mensaje: string, tipo: string = 'error', tiempoVisible: number = 0) => {
@@ -177,9 +276,10 @@ export default function SistemaSolicitudes() {
   const limpiarMensajes = () => {
     setMensajeSistema('')
     setTipoMensaje('')
+    setDuplicadoDetectado(null) // 🔥 NUEVO: Limpiar también el estado de duplicado
   }
 
-  // 🔥 FUNCIONES DE VERIFICACIÓN DE DUPLICADOS
+  // 🔥 FUNCIONES DE VERIFICACIÓN DE DUPLICADOS ORIGINAL (modificada para coexistir)
   const calcularSimilitud = (str1: string, str2: string): number => {
     if (str1.length === 0 && str2.length === 0) return 1.0;
     const longer = str1.length > str2.length ? str1 : str2;
@@ -193,10 +293,8 @@ export default function SistemaSolicitudes() {
     const s1Len = s1.length;
     const s2Len = s2.length;
 
-    // Crear una matriz para almacenar las distancias
     let matrix: number[][] = [];
 
-    // Inicializar la primera columna y la primera fila
     for (let i = 0; i <= s1Len; i++) {
       matrix[i] = [i];
     }
@@ -204,37 +302,38 @@ export default function SistemaSolicitudes() {
       matrix[0][j] = j;
     }
 
-    // Calcular la distancia
     for (let i = 1; i <= s1Len; i++) {
       for (let j = 1; j <= s2Len; j++) {
         const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
         matrix[i][j] = Math.min(
-          matrix[i - 1][j] + 1,     // eliminación
-          matrix[i][j - 1] + 1,     // inserción
-          matrix[i - 1][j - 1] + cost // sustitución
+          matrix[i - 1][j] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j - 1] + cost
         );
       }
     }
 
-  return matrix[s1Len][s2Len];
-};
+    return matrix[s1Len][s2Len];
+  };
 
   const verificarDuplicados = (solicitud: Solicitud): Solicitud | null => {
     const ultimas24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000)
     const solicitudesRecientes = JSON.parse(localStorage.getItem(ULTIMAS_SOLICITUDES_KEY) || '[]')
     
-    // Si hay un fixer específico, NO aplicamos verificación de duplicados
+    // Si hay un fixer específico, aplicar la nueva verificación
     if (solicitud.nombreFixer && solicitud.nombreFixer.trim() !== '') {
-      console.log(`Fixer específico "${solicitud.nombreFixer}" detectado - Omite verificación de duplicados`)
+      const resultado = verificarDuplicadoFixerServicio(solicitud.nombreFixer, solicitud.servicio)
+      if (resultado.encontrado) {
+        return resultado.solicitud
+      }
       return null
     }
     
-    // Solo verificamos duplicados para solicitudes sin fixer específico
+    // Verificación original para solicitudes sin fixer específico
     return solicitudesRecientes.find((s: Solicitud) => 
       s.nombreRequester === solicitud.nombreRequester &&
       s.servicio === solicitud.servicio &&
       s.zona === solicitud.zona &&
-      // Solo comparar con solicitudes que tampoco tengan fixer específico
       (!s.nombreFixer || s.nombreFixer.trim() === '') &&
       new Date(s.fechaRegistro) > ultimas24Horas &&
       calcularSimilitud(s.descripcion, solicitud.descripcion) > 0.9
@@ -254,11 +353,10 @@ export default function SistemaSolicitudes() {
     const trabajaSabado = formData.trabajaSabado === 'true'
     const nombreFixer = formData.nombreFixer.trim()
     
-    // 🔥 CORRECCIÓN: Generar código único aquí, solo cuando se prepara la solicitud
     const codigoGenerado = generarCodigoUnico()
     
     return {
-      codigoUnico: codigoGenerado, // Usar el código recién generado
+      codigoUnico: codigoGenerado,
       region: formData.region,
       numero: formData.numero,
       nombreRequester: formData.nombreRequester,
@@ -273,46 +371,53 @@ export default function SistemaSolicitudes() {
       fechaRegistroStr: fechaRegistroInfo.formato,
       fechaEstimada: calcularFechaEstimadaRespuesta(fechaRegistroInfo.fechaHora, trabajaSabado),
       estado: 'Creada',
-      estadoSolicitud: 'Pendiente', // 🔥 NUEVO: Estado de solicitud pendiente
+      estadoSolicitud: 'Pendiente',
       timestampUnico: Date.now() + Math.random().toString(36).substring(2, 11)
     }
   }
 
   const registrarSolicitud = async (solicitud: Solicitud): Promise<Solicitud> => {
-    // Verificar unicidad del código (aunque ahora es menos probable que se repita)
     const solicitudesExistentes: Solicitud[] = JSON.parse(localStorage.getItem(SOLICITUDES_KEY) || '[]')
     const codigoExiste = solicitudesExistentes.some(s => s.codigoUnico === solicitud.codigoUnico)
     
     if (codigoExiste) {
-      // 🔥 CORRECCIÓN: Regenerar código si por alguna razón existe
       const nuevoCodigo = generarCodigoUnico()
       solicitud.codigoUnico = nuevoCodigo
     }
 
-    // Registrar en base de datos
     solicitudesExistentes.push(solicitud)
     localStorage.setItem(SOLICITUDES_KEY, JSON.stringify(solicitudesExistentes))
     
-    // Guardar en últimas solicitudes para verificación de duplicados
     const ultimasSolicitudes: Solicitud[] = JSON.parse(localStorage.getItem(ULTIMAS_SOLICITUDES_KEY) || '[]')
     ultimasSolicitudes.push(solicitud)
     
-    // Mantener solo las últimas 100 solicitudes para optimizar rendimiento
     if (ultimasSolicitudes.length > 100) {
       ultimasSolicitudes.splice(0, ultimasSolicitudes.length - 100)
     }
     
     localStorage.setItem(ULTIMAS_SOLICITUDES_KEY, JSON.stringify(ultimasSolicitudes))
     
-    // Actualizar UI con la información confirmada
+    // 🔥 NUEVO: Guardar log de registro exitoso
+    guardarLogVerificacion({
+      timestamp: new Date(),
+      tipo: 'registro_exitoso',
+      codigoSolicitud: solicitud.codigoUnico,
+      nombreFixer: solicitud.nombreFixer || 'Sin fixer específico',
+      servicio: solicitud.servicio,
+      mensaje: `Solicitud registrada exitosamente - ${solicitud.codigoUnico}`,
+      datosComparados: {
+        fixer: solicitud.nombreFixer || 'Sin fixer específico',
+        servicio: solicitud.servicio,
+        nombreCliente: solicitud.nombreRequester
+      }
+    })
+    
     actualizarUI(solicitud)
     
-    // Mostrar información específica sobre el fixer en la UI
     if (solicitud.tieneFixerEspecifico) {
       mostrarMensaje(`Solicitud creada con fixer específico: ${solicitud.nombreFixer}`, 'success', 3000)
     }
     
-    // Simular delay de base de datos
     await new Promise(resolve => setTimeout(resolve, 500))
     
     return solicitud
@@ -320,12 +425,11 @@ export default function SistemaSolicitudes() {
 
   const actualizarUI = (solicitud: Solicitud): void => {
     setEstadoSolicitud(solicitud.estado)
-    setEstadoSolicitudPendiente(solicitud.estadoSolicitud) // 🔥 NUEVO: Actualizar estado pendiente
+    setEstadoSolicitudPendiente(solicitud.estadoSolicitud)
     setFechaRegistro(solicitud.fechaRegistroStr)
     setFechaEstimada(solicitud.fechaEstimada)
     setCodigoUnico(solicitud.codigoUnico)
     
-    // Mostrar información del fixer si existe
     if (solicitud.tieneFixerEspecifico) {
       setEstadoSolicitud(`${solicitud.estado} (Fixer: ${solicitud.nombreFixer})`)
     }
@@ -337,10 +441,8 @@ export default function SistemaSolicitudes() {
   }
 
   const generarMensajeConfirmacion = (solicitud: Solicitud): MensajeAPI => {
-    // 🔥 MEJORA: Agregar "Solicitud: Pendiente" al mensaje
     let mensajeBase = `¡Hola ${solicitud.nombreRequester}!\n✅ Tu solicitud ha sido registrada con éxito.\nCódigo: ${solicitud.codigoUnico}\nEstado: ${solicitud.estado}\nTipo de servicio: ${solicitud.servicio}\nDescripción: ${solicitud.descripcionTruncada}\nFecha y hora de registro: ${solicitud.fechaRegistroStr}\nFecha estimada de respuesta: ${solicitud.fechaEstimada}\nSolicitud: ${solicitud.estadoSolicitud}`
     
-    // Agregar información del fixer si existe
     if (solicitud.tieneFixerEspecifico) {
       mensajeBase += `\nFixer asignado: ${solicitud.nombreFixer}`
     }
@@ -351,7 +453,6 @@ export default function SistemaSolicitudes() {
     }
   }
 
-  // 🔥 FUNCIÓN MEJORADA: Agregar log de reintento
   const agregarLogReintento = (intento: number, tiempoEspera: number, resultado: string, tiempoRespuesta?: number, error?: string) => {
     const nuevoLog: LogReintento = {
       intento,
@@ -364,7 +465,6 @@ export default function SistemaSolicitudes() {
     
     setLogsReintentos(prev => [...prev, nuevoLog])
     
-    // Actualizar también la respuesta del servidor para mostrar en tiempo real
     const tiempoFormateado = new Date().toLocaleTimeString()
     const logEntry = `[${tiempoFormateado}] Intento ${intento}: ${resultado} (Espera: ${tiempoEspera}ms${tiempoRespuesta ? `, Respuesta: ${tiempoRespuesta}ms` : ''}${error ? `, Error: ${error}` : ''})`
     
@@ -372,10 +472,9 @@ export default function SistemaSolicitudes() {
   }
 
   const enviarMensajeAPI = async (mensaje: MensajeAPI, idempotencyKey: string): Promise<{respuesta: string, tiempoRespuesta: number}> => {
-    const inicio = Date.now() // 🔥 MOVER fuera del try para que esté disponible en el catch
+    const inicio = Date.now()
     
     try {
-      // Mostrar JSON que se enviará
       setJsonEnviado(JSON.stringify(mensaje, null, 2))
       
       const res = await fetch("https://n8n-evolution-api.oumu0g.easypanel.host/message/sendText/pruebas", {
@@ -398,12 +497,11 @@ export default function SistemaSolicitudes() {
 
       return { respuesta, tiempoRespuesta }
     } catch (err: any) {
-      const tiempoRespuesta = Date.now() - inicio // 🔥 Ahora 'inicio' está disponible
+      const tiempoRespuesta = Date.now() - inicio
       throw new Error(`Error al enviar: ${err.message} (Tiempo: ${tiempoRespuesta}ms)`)
     }
   }
 
-  // 🔥 FUNCIÓN MEJORADA: Envío de mensajes con logs detallados
   const enviarMensajes = async (solicitud: Solicitud): Promise<void> => {
     const inicioEnvio = Date.now()
     
@@ -414,7 +512,6 @@ export default function SistemaSolicitudes() {
 
       const mensajeConfirmacion = generarMensajeConfirmacion(solicitud)
       
-      // Intento inicial
       agregarLogReintento(1, 0, 'Iniciando envío...')
       const { respuesta, tiempoRespuesta } = await enviarMensajeAPI(mensajeConfirmacion, solicitud.codigoUnico)
       
@@ -430,36 +527,30 @@ export default function SistemaSolicitudes() {
       return
       
     } catch (error: any) {
-      // 🔥 MEJORA: Registrar el error del primer intento
       agregarLogReintento(1, 0, '❌ FALLÓ', undefined, error.message)
       
-      // Reintentos con logs detallados
       let intento = 2
       const tiemposEspera = [5000, 15000, 30000]
       
-      while (intento <= 4) { // 3 reintentos (intentos 2, 3, 4)
+      while (intento <= 4) {
         const tiempoEspera = tiemposEspera[intento - 2]
         
         try {
-          // 🔥 MEJORA: Registrar que estamos esperando antes del reintento
           agregarLogReintento(intento, tiempoEspera, `⏳ Esperando ${tiempoEspera}ms para reintento...`)
           
           await new Promise(resolve => setTimeout(resolve, tiempoEspera))
           
-          // 🔥 MEJORA: Registrar inicio del reintento
           agregarLogReintento(intento, tiempoEspera, '🔄 Realizando reintento...')
           
           const mensajeConfirmacion = generarMensajeConfirmacion(solicitud)
           const { respuesta, tiempoRespuesta } = await enviarMensajeAPI(mensajeConfirmacion, solicitud.codigoUnico + '-reintento-' + (intento - 1))
           
-          // 🔥 MEJORA: Registrar éxito del reintento
           agregarLogReintento(intento, tiempoEspera, '✅ REINTENTO EXITOSO', tiempoRespuesta)
           
           console.log(`Reintento ${intento - 1} exitoso`)
           return
           
         } catch (errorRetry: any) {
-          // 🔥 MEJORA: Registrar fallo del reintento
           agregarLogReintento(intento, tiempoEspera, `❌ REINTENTO FALLIDO`, undefined, errorRetry.message)
           
           console.error(`Reintento ${intento - 1} fallido:`, errorRetry)
@@ -467,7 +558,6 @@ export default function SistemaSolicitudes() {
         }
       }
       
-      // Si llegamos aquí, todos los reintentos fallaron
       const tiempoTotal = Date.now() - inicioEnvio
       const mensajeError = `Solicitud creada (Código ${solicitud.codigoUnico}), pero no pudimos enviar la confirmación después de 3 reintentos. Tiempo total: ${tiempoTotal}ms. Intenta revisar el estado en la app.`
       
@@ -483,7 +573,7 @@ export default function SistemaSolicitudes() {
     limpiarMensajes()
     setJsonEnviado('')
     setRespuestaServidor('')
-    setLogsReintentos([]) // Limpiar logs anteriores
+    setLogsReintentos([])
 
     try {
       // 1. Validaciones iniciales
@@ -491,10 +581,18 @@ export default function SistemaSolicitudes() {
         throw new Error('Por favor complete todos los campos requeridos')
       }
 
-      // 2. Preparar datos de la solicitud (aquí se genera el código único)
+      // 🔥 NUEVO: Verificación específica por fixer y servicio
+      if (formData.nombreFixer.trim() !== '') {
+        const resultadoDuplicado = verificarDuplicadoFixerServicio(formData.nombreFixer, formData.servicio)
+        if (resultadoDuplicado.encontrado) {
+          throw new Error(`🚫 Ya existe un registro con el mismo Fixer y Servicio. Código del registro existente: ${resultadoDuplicado.codigo}`)
+        }
+      }
+
+      // 2. Preparar datos de la solicitud
       const solicitud = prepararSolicitud()
       
-      // 3. Verificar duplicados (solo aplica para solicitudes sin fixer específico)
+      // 3. Verificar duplicados (para casos sin fixer específico)
       const duplicado = verificarDuplicados(solicitud)
       if (duplicado) {
         mostrarMensaje(
@@ -508,7 +606,7 @@ export default function SistemaSolicitudes() {
       // 4. Registrar solicitud
       const solicitudRegistrada = await registrarSolicitud(solicitud)
       
-      // 5. Enviar mensajes SOLO después de confirmar el registro exitoso
+      // 5. Enviar mensajes
       await enviarMensajes(solicitudRegistrada)
       
       mostrarMensaje('✅ Solicitud registrada y mensaje enviado exitosamente!', 'success')
@@ -520,7 +618,6 @@ export default function SistemaSolicitudes() {
     }
   }
 
-  // 🔥 FUNCIÓN MEJORADA: Formatear logs para mostrar
   const formatearLogsReintentos = (): string => {
     if (logsReintentos.length === 0) return ''
     
@@ -543,14 +640,13 @@ export default function SistemaSolicitudes() {
     }).join('\n')
   }
 
-  // Función para volver - usando window.location.href como en el otro código
   const goBack = () => {
     window.location.href = '/servineo';
   }
 
   return (
     <div className="container" style={{position: 'relative'}}>
-      {/* Botón Atrás IDÉNTICO al del otro código */}
+      {/* Botón Atrás */}
       <button
         onClick={goBack}
         className="absolute top-6 left-6 p-3 bg-[#2B3FE0] text-[#2BD0F0] rounded-xl hover:bg-[#1AA7ED] hover:text-white transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 z-10"
@@ -566,6 +662,25 @@ export default function SistemaSolicitudes() {
         <p className="subtitle">Gestiona solicitudes y comunica con los Fixers fácilmente</p>
       </div>
 
+      {/* 🔥 NUEVO: Alerta de duplicado detectado en tiempo real */}
+      {duplicadoDetectado && duplicadoDetectado.encontrado && (
+        <div className="system-message message-advertencia" style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          backgroundColor: '#fef3c7',
+          border: '1px solid #f59e0b',
+          color: '#92400e'
+        }}>
+          <FaExclamationTriangle className="h-5 w-5" />
+          <div>
+            <strong>⚠️ Duplicado detectado:</strong> Ya existe un registro con el mismo Fixer y Servicio. 
+            <br />
+            <strong>Código del registro existente:</strong> {duplicadoDetectado.codigo}
+          </div>
+        </div>
+      )}
+
       {/* Estados del sistema */}
       <div className="status-section">
         <div className="status-item">
@@ -576,7 +691,6 @@ export default function SistemaSolicitudes() {
           <div className="status-label">Estado</div>
           <div className="status-value">{estadoSolicitud}</div>
         </div>
-        {/* 🔥 NUEVO: Cuadro de Solicitud Pendiente */}
         <div className="status-item">
           <div className="status-label">Solicitud</div>
           <div className="status-value" style={{color: '#fbbf24', fontWeight: 'bold'}}>
@@ -692,7 +806,7 @@ export default function SistemaSolicitudes() {
               placeholder="Dejar vacío para asignación automática"
             />
             <small style={{color: '#94a3b8', fontSize: '0.8rem', marginTop: '5px'}}>
-              ⚠️ Si asignas un fixer específico, se omitirá la verificación de duplicados
+              ⚠️ Si asignas un fixer específico, se verificará por duplicados de fixer y servicio
             </small>
           </div>
           <div className="form-group">
@@ -711,16 +825,17 @@ export default function SistemaSolicitudes() {
       </div>
 
       {/* Botón de acción */}
-      <div style={{textAlign: 'center', marginTop: '2rem'}}>
-        <button 
-          onClick={procesarSolicitud}
-          disabled={procesando}
-          className="button"
-          style={{minWidth: '200px'}}
-        >
-          {procesando ? '⏳ Procesando...' : '🚀 Registrar Solicitud'}
-        </button>
-      </div>
+      // Botón de acción - CORREGIDO
+    <div style={{textAlign: 'center', marginTop: '2rem'}}>
+      <button 
+        onClick={procesarSolicitud}
+        disabled={procesando || (duplicadoDetectado ? duplicadoDetectado.encontrado : false)}
+        className="button"
+        style={{minWidth: '200px'}}
+      >
+        {procesando ? '⏳ Procesando...' : '🚀 Registrar Solicitud'}
+      </button>
+    </div>
 
       {/* Debug información - JSON enviado y respuesta */}
       {(jsonEnviado || respuestaServidor) && (
@@ -743,7 +858,6 @@ export default function SistemaSolicitudes() {
               </div>
             )}
             
-            {/* 🔥 MEJORA: Sección de logs de reintentos */}
             {logsReintentos.length > 0 && (
               <div className="form-group" style={{gridColumn: '1 / -1'}}>
                 <label className="form-label">📊 Logs de Reintentos:</label>
