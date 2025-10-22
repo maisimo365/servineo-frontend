@@ -40,9 +40,49 @@ export default function Par3Page() {
     }
   }, [localLogs]);
 
+  // Validar y formatear número boliviano internacional (591 + 8 dígitos)
+  const formatBolivianPhoneInternational = (value: string): string => {
+    // Solo permitir números
+    const numbersOnly = value.replace(/[^\d]/g, '');
+    
+    // Si empieza con 591, limitar a 11 dígitos (591 + 8)
+    if (numbersOnly.startsWith('591')) {
+      return numbersOnly.slice(0, 11);
+    }
+    // Si no empieza con 591, pero ya tiene más de 3 dígitos, forzar 591 al inicio
+    else if (numbersOnly.length > 3) {
+      return '591' + numbersOnly.slice(0, 8);
+    }
+    // Si es menor a 3 dígitos, permitir edición normal
+    else {
+      return numbersOnly;
+    }
+  };
+
+  // Validar texto (solo letras, acentos, espacios)
+  const formatTextOnly = (value: string): string => {
+    // Permitir letras, acentos, espacios, ñ, Ñ y algunos signos de puntuación comunes
+    return value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.,!?¿¡-]/g, '');
+  };
+
   const handleClientChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
-    setClientData((prev) => ({ ...prev, [id]: value }));
+    
+    let formattedValue = value;
+    
+    // Aplicar validaciones según el campo
+    if (id === 'telefonoCliente') {
+      formattedValue = formatBolivianPhoneInternational(value);
+    } else if (id === 'nombreCliente') {
+      formattedValue = formatTextOnly(value);
+    }
+    // Descripción permite números y texto
+    else if (id === 'descripcion') {
+      // Permitir texto normal para descripción
+      formattedValue = value;
+    }
+    
+    setClientData((prev) => ({ ...prev, [id]: formattedValue }));
   };
 
   const habilitarEdicion = (id: keyof Fixer) => setEditando(id);
@@ -54,7 +94,16 @@ export default function Par3Page() {
   };
 
   const handleFixerChange = (id: keyof Fixer, value: string) => {
-    setFixer({ ...fixer, [id]: value });
+    let formattedValue = value;
+    
+    // Aplicar validaciones según el campo
+    if (id === 'fixerTelefono') {
+      formattedValue = formatBolivianPhoneInternational(value);
+    } else if (id === 'fixerNombre' || id === 'fixerProfesion') {
+      formattedValue = formatTextOnly(value);
+    }
+    
+    setFixer({ ...fixer, [id]: formattedValue });
   };
 
   // Función para agregar un nuevo log local
@@ -84,13 +133,13 @@ export default function Par3Page() {
     const URL_RESPUESTA = "https://tuapp.com/responder-solicitud";
 
     // Validaciones - cambiadas a alert nativo
-    if (!fixerTelefono || fixerTelefono.trim() === "") {
-      alert("❌ Error: El campo 'Número Destino' del Fixer es obligatorio");
+    if (!fixerTelefono || fixerTelefono.trim() === "" || fixerTelefono.length !== 11) {
+      alert("❌ Error: El campo 'Número Destino' del Fixer es obligatorio y debe tener el formato 591 + 8 dígitos (11 números en total)");
       return;
     }
 
-    if (!telefonoCliente || telefonoCliente.trim() === "") {
-      alert("❌ Error: El teléfono del cliente es obligatorio");
+    if (!telefonoCliente || telefonoCliente.trim() === "" || telefonoCliente.length !== 11) {
+      alert("❌ Error: El teléfono del cliente es obligatorio y debe tener el formato 591 + 8 dígitos (11 números en total)");
       return;
     }
 
@@ -274,9 +323,14 @@ Por favor, revisa y responde lo antes posible.`;
                   id="telefonoCliente"
                   value={clientData.telefonoCliente}
                   onChange={handleClientChange}
-                  placeholder="Solo números. Ej: 59133344455"
+                  placeholder="Ej: 59160606060 (11 dígitos)"
                   className="w-full p-3 border border-[#D1D5DB] rounded-lg focus:border-[#2B31E0] focus:ring-2 focus:ring-[#2B31E0]/20 text-[#111827] transition"
+                  maxLength={11}
+                  inputMode="numeric"
                 />
+                <div className="text-xs text-[#64748B] mt-1">
+                  {clientData.telefonoCliente.length}/11 dígitos (591 + 8 dígitos)
+                </div>
               </div>
 
               <div>
@@ -286,7 +340,7 @@ Por favor, revisa y responde lo antes posible.`;
                   id="nombreCliente"
                   value={clientData.nombreCliente}
                   onChange={handleClientChange}
-                  placeholder="Ej: Juan Pérez"
+                  placeholder="Ej: Juan Pérez (solo letras)"
                   className="w-full p-3 border border-[#D1D5DB] rounded-lg focus:border-[#2B31E0] focus:ring-2 focus:ring-[#2B31E0]/20 text-[#111827] transition"
                 />
               </div>
@@ -332,6 +386,17 @@ Por favor, revisa y responde lo antes posible.`;
                             : "border-[#D1D5DB] bg-white"
                         }`}
                         onKeyDown={(e) => e.key === "Enter" && guardarCambio(key as keyof Fixer)}
+                        placeholder={
+                          key === "fixerTelefono" 
+                            ? "Ej: 59160606060 (11 dígitos)" 
+                            : key === "fixerNombre"
+                            ? "Ej: Carlos López (solo letras)"
+                            : key === "fixerProfesion"
+                            ? "Ej: Técnico en electrónica"
+                            : ""
+                        }
+                        maxLength={key === "fixerTelefono" ? 11 : undefined}
+                        inputMode={key === "fixerTelefono" ? "numeric" : "text"}
                       />
                       {editando === key ? (
                         <button
@@ -349,6 +414,11 @@ Por favor, revisa y responde lo antes posible.`;
                         </button>
                       )}
                     </div>
+                    {key === "fixerTelefono" && (
+                      <div className="text-xs text-[#64748B]">
+                        {value.length}/11 dígitos (591 + 8 dígitos)
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
