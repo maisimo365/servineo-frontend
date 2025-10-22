@@ -159,7 +159,7 @@ Por favor, revisa y responde lo antes posible.`;
         );
         
         // Cambiado a alert nativo
-        alert(`❌ Error ${respuesta.status}: No se pudo enviar la notificación`);
+        alert(`❌ Error: El número del Fixer no existe`);
       }
     } catch (error) {
       console.error("Error en la petición:", error);
