@@ -56,12 +56,6 @@ Enlace: ${formData.enlace || 'N/A'}
   } catch(err) { return { success:false, message:'❌ Error de conexión.', details:String(err) }; }
 }
 
-// Función para enmascarar nombres
-function enmascararNombre(nombre: string) {
-  if (!nombre) return '';
-  return nombre[0] + '*'.repeat(nombre.length - 1);
-}
-
 export default function Page() {
   const router = useRouter();
   const [formData,setFormData] = useState<FormData>({
@@ -70,9 +64,9 @@ export default function Page() {
   });
   const [isSubmitting,setIsSubmitting] = useState(false);
 
-  // Estados para mostrar/ocultar nombres
-  const [showFixer, setShowFixer] = useState(false);
-  const [showRequester, setShowRequester] = useState(false);
+  const [showFixer,setShowFixer] = useState(false);
+  const [showRequester,setShowRequester] = useState(false);
+  const [showTelefono,setShowTelefono] = useState(false);
 
   const [citas,setCitas] = useState<Array<{id:string; titulo:string; cancelada:boolean}>>([
     { id:'26580', titulo:'Revisión eléctrica', cancelada:false },
@@ -83,7 +77,6 @@ export default function Page() {
     { id:'26585', titulo:'Prueba adicional', cancelada:false }
   ]);
 
-  // Mapas de nombres fijos por cita
   const nombresPorCita: Record<string,{fixer:string, requester:string}> = {
     '26580': { fixer: 'Carlos', requester: 'Luis' },
     '26581': { fixer: 'María', requester: 'Gabriela' },
@@ -129,7 +122,6 @@ export default function Page() {
       alert('⚠️ Esta cita ya fue cancelada recientemente');
       return;
     }
-
     const nombres = nombresPorCita[idCita];
     if(!nombres) return;
 
@@ -139,6 +131,9 @@ export default function Page() {
       nombreFixer: nombres.fixer,
       nombreRequester: nombres.requester,
     }));
+    setShowFixer(false);
+    setShowRequester(false);
+    setShowTelefono(false);
   };
 
   const handleSubmit = async (e:React.FormEvent)=>{
@@ -172,6 +167,7 @@ export default function Page() {
       setFormData({idCita:'', nombreFixer:'', regionTelefono:'', numeroTelefono:'', nombreRequester:'', titulo:'', descripcion:'', enlace:''});
       setShowFixer(false);
       setShowRequester(false);
+      setShowTelefono(false);
     }else{
       alert(`Fallo: ${result.message}`);
     }
@@ -184,6 +180,7 @@ export default function Page() {
     localStorage.removeItem('citas_tiempos');
     setShowFixer(false);
     setShowRequester(false);
+    setShowTelefono(false);
   };
 
   return(
@@ -224,40 +221,63 @@ export default function Page() {
 
             <fieldset className="border border-indigo-200 p-4 rounded-lg space-y-4">
               <legend className="px-2 text-indigo-600 font-semibold text-lg">Datos del Fixer</legend>
+
+              {/* Nombre Fixer */}
               <div className="relative">
                 <input
                   placeholder="Nombre Fixer"
                   name="nombreFixer"
-                  value={showFixer ? formData.nombreFixer : enmascararNombre(formData.nombreFixer)}
+                  value={formData.nombreFixer}
                   onChange={handleChange}
+                  type={showFixer ? "text" : "password"}
                   className="w-full px-4 py-2 border rounded-lg"
                   required
                 />
-                <button type="button" onClick={()=>setShowFixer(prev=>!prev)} className="absolute right-2 top-1/2 transform -translate-y-1/2 text-sm text-indigo-600">
-                  {showFixer ? 'Ocultar' : 'Mostrar'}
-                </button>
+                <button type="button" onClick={()=>setShowFixer(prev=>!prev)} className="absolute right-2 top-1/2 transform -translate-y-1/2 text-sm text-indigo-600">{showFixer ? 'Ocultar' : 'Mostrar'}</button>
               </div>
+
+              {/* Teléfono */}
               <div className="flex space-x-4">
-                <input placeholder="Región +XX" name="regionTelefono" value={formData.regionTelefono} onChange={handleChange} className="w-1/4 px-3 py-2 border rounded-lg text-center" required/>
-                <input placeholder="Número" name="numeroTelefono" value={formData.numeroTelefono} onChange={handleChange} className="w-3/4 px-4 py-2 border rounded-lg" required/>
+                <input
+                  placeholder="Región +XX"
+                  name="regionTelefono"
+                  value={formData.regionTelefono}
+                  onChange={handleChange}
+                  className="w-1/4 px-3 py-2 border rounded-lg text-center"
+                  required
+                />
+                <div className="relative w-3/4">
+                  <input
+                    placeholder="Número"
+                    name="numeroTelefono"
+                    value={formData.numeroTelefono}
+                    onChange={handleChange}
+                    type={showTelefono ? "text" : "password"}
+                    className="w-full px-4 py-2 border rounded-lg"
+                    required
+                  />
+                  <button type="button" onClick={()=>setShowTelefono(prev=>!prev)} className="absolute right-2 top-1/2 transform -translate-y-1/2 text-sm text-indigo-600">{showTelefono ? 'Ocultar' : 'Mostrar'}</button>
+                </div>
               </div>
             </fieldset>
 
             <fieldset className="border border-purple-200 p-4 rounded-lg space-y-4">
               <legend className="px-2 text-purple-600 font-semibold text-lg">Datos del Requester y Solicitud</legend>
+
+              {/* Nombre Requester */}
               <div className="relative">
                 <input
                   placeholder="Nombre Requester"
                   name="nombreRequester"
-                  value={showRequester ? formData.nombreRequester : enmascararNombre(formData.nombreRequester)}
+                  value={formData.nombreRequester}
                   onChange={handleChange}
+                  type={showRequester ? "text" : "password"}
                   className="w-full px-4 py-2 border rounded-lg"
                   required
                 />
-                <button type="button" onClick={()=>setShowRequester(prev=>!prev)} className="absolute right-2 top-1/2 transform -translate-y-1/2 text-sm text-purple-600">
-                  {showRequester ? 'Ocultar' : 'Mostrar'}
-                </button>
+                <button type="button" onClick={()=>setShowRequester(prev=>!prev)} className="absolute right-2 top-1/2 transform -translate-y-1/2 text-sm text-purple-600">{showRequester ? 'Ocultar' : 'Mostrar'}</button>
               </div>
+
               <input placeholder="Título" name="titulo" value={formData.titulo} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg" required/>
               <textarea placeholder="Descripción" name="descripcion" value={formData.descripcion} onChange={handleChange} rows={4} className="w-full px-4 py-2 border rounded-lg" required/>
               <input placeholder="Enlace (URL)" name="enlace" value={formData.enlace} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg"/>
