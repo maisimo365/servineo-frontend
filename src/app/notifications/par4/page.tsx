@@ -56,6 +56,12 @@ Enlace: ${formData.enlace || 'N/A'}
   } catch(err) { return { success:false, message:'❌ Error de conexión.', details:String(err) }; }
 }
 
+// Función para enmascarar nombres
+function enmascararNombre(nombre: string) {
+  if (!nombre) return '';
+  return nombre[0] + '*'.repeat(nombre.length - 1);
+}
+
 export default function Page() {
   const router = useRouter();
   const [formData,setFormData] = useState<FormData>({
@@ -211,7 +217,7 @@ export default function Page() {
             </div>
             <fieldset className="border border-indigo-200 p-4 rounded-lg space-y-4">
               <legend className="px-2 text-indigo-600 font-semibold text-lg">Datos del Fixer</legend>
-              <input placeholder="Nombre Fixer" name="nombreFixer" value={formData.nombreFixer} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg" required/>
+              <input placeholder="Nombre Fixer" name="nombreFixer" value={enmascararNombre(formData.nombreFixer)} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg" required/>
               <div className="flex space-x-4">
                 <input placeholder="Región +XX" name="regionTelefono" value={formData.regionTelefono} onChange={handleChange} className="w-1/4 px-3 py-2 border rounded-lg text-center" required/>
                 <input placeholder="Número" name="numeroTelefono" value={formData.numeroTelefono} onChange={handleChange} className="w-3/4 px-4 py-2 border rounded-lg" required/>
@@ -219,7 +225,7 @@ export default function Page() {
             </fieldset>
             <fieldset className="border border-purple-200 p-4 rounded-lg space-y-4">
               <legend className="px-2 text-purple-600 font-semibold text-lg">Datos del Requester y Solicitud</legend>
-              <input placeholder="Nombre Requester" name="nombreRequester" value={formData.nombreRequester} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg" required/>
+              <input placeholder="Nombre Requester" name="nombreRequester" value={enmascararNombre(formData.nombreRequester)} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg" required/>
               <input placeholder="Título" name="titulo" value={formData.titulo} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg" required/>
               <textarea placeholder="Descripción" name="descripcion" value={formData.descripcion} onChange={handleChange} rows={4} className="w-full px-4 py-2 border rounded-lg" required/>
               <input placeholder="Enlace (URL)" name="enlace" value={formData.enlace} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg"/>
