@@ -1,9 +1,9 @@
-﻿// app/page.tsx - VERSION CON LÍMITE DE CARACTERES Y DETALLE DE CÓDIGO ÚNICO
+﻿// app/page.tsx - VERSION CORREGIDA
 "use client"
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { FaArrowLeft, FaExclamationTriangle } from 'react-icons/fa'
+import { FaArrowLeft, FaExclamationTriangle, FaTimesCircle } from 'react-icons/fa'
 
 // Interfaces y tipos
 interface FormData {
@@ -76,10 +76,23 @@ interface ErrorCanal {
   numero: string
 }
 
+// Nueva interfaz para solicitudes inválidas
+interface SolicitudInvalida {
+  codigoUnico: string
+  estado: string
+  fechaRegistro: string
+  fechaEstimada: string
+  motivo: string
+  numero: string
+  servicio: string
+  nombreRequester: string
+}
+
 // Constantes
 const SOLICITUDES_KEY = 'solicitudes_registradas'
 const ULTIMAS_SOLICITUDES_KEY = 'ultimas_solicitudes'
 const LOGS_VERIFICACION_KEY = 'logs_verificacion_duplicados'
+const SOLICITUDES_INVALIDAS_KEY = 'solicitudes_invalidas'
 
 export default function SistemaSolicitudes() {
   const router = useRouter()
@@ -96,6 +109,8 @@ export default function SistemaSolicitudes() {
   const [logsReintentos, setLogsReintentos] = useState<LogReintento[]>([])
   const [duplicadoDetectado, setDuplicadoDetectado] = useState<{encontrado: boolean, codigo: string, datos: any} | null>(null)
   const [solicitudCreada, setSolicitudCreada] = useState(false)
+  const [ultimaSolicitudInvalida, setUltimaSolicitudInvalida] = useState<SolicitudInvalida | null>(null) // CAMBIO: Solo la última
+  const [mostrarSolicitudesInvalidas, setMostrarSolicitudesInvalidas] = useState(false)
 
   const [formData, setFormData] = useState<FormData>({
     region: '591',
@@ -116,9 +131,13 @@ export default function SistemaSolicitudes() {
 
   useEffect(() => {
     inicializarAlmacenamiento()
+    // NO cargar solicitudes inválidas automáticamente al iniciar
+    // Solo cargarlas cuando realmente se necesiten mostrar
   }, [])
 
   const inicializarAlmacenamiento = () => {
+    if (typeof window === 'undefined') return;
+    
     if (!localStorage.getItem(SOLICITUDES_KEY)) {
       localStorage.setItem(SOLICITUDES_KEY, JSON.stringify([]))
     }
@@ -128,9 +147,51 @@ export default function SistemaSolicitudes() {
     if (!localStorage.getItem(LOGS_VERIFICACION_KEY)) {
       localStorage.setItem(LOGS_VERIFICACION_KEY, JSON.stringify([]))
     }
+    if (!localStorage.getItem(SOLICITUDES_INVALIDAS_KEY)) {
+      localStorage.setItem(SOLICITUDES_INVALIDAS_KEY, JSON.stringify([]))
+    }
+  }
+
+  const cargarUltimaSolicitudInvalida = () => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const solicitudesInvalidasStorage = localStorage.getItem(SOLICITUDES_INVALIDAS_KEY)
+      if (solicitudesInvalidasStorage) {
+        const solicitudes = JSON.parse(solicitudesInvalidasStorage)
+        // OBTENER SOLO LA ÚLTIMA SOLICITUD
+        if (solicitudes.length > 0) {
+          setUltimaSolicitudInvalida(solicitudes[solicitudes.length - 1])
+        }
+      }
+    } catch (error) {
+      console.error('Error al cargar última solicitud inválida:', error)
+    }
+  }
+
+  const guardarSolicitudInvalida = (solicitud: SolicitudInvalida) => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const solicitudesExistentes: SolicitudInvalida[] = JSON.parse(localStorage.getItem(SOLICITUDES_INVALIDAS_KEY) || '[]')
+      solicitudesExistentes.push(solicitud)
+      
+      if (solicitudesExistentes.length > 100) {
+        solicitudesExistentes.splice(0, solicitudesExistentes.length - 100)
+      }
+      
+      localStorage.setItem(SOLICITUDES_INVALIDAS_KEY, JSON.stringify(solicitudesExistentes))
+      // GUARDAR SOLO LA ÚLTIMA SOLICITUD EN EL ESTADO
+      setUltimaSolicitudInvalida(solicitud)
+      setMostrarSolicitudesInvalidas(true)
+    } catch (error) {
+      console.error('Error al guardar solicitud inválida:', error)
+    }
   }
 
   const guardarLogVerificacion = (log: LogVerificacion) => {
+    if (typeof window === 'undefined') return;
+    
     try {
       const logsExistentes: LogVerificacion[] = JSON.parse(localStorage.getItem(LOGS_VERIFICACION_KEY) || '[]')
       logsExistentes.push(log)
@@ -146,6 +207,10 @@ export default function SistemaSolicitudes() {
   }
 
   const verificarDuplicadoFixerServicio = (nombreFixer: string, servicio: string): {encontrado: boolean, codigo: string, solicitud: Solicitud | null} => {
+    if (typeof window === 'undefined') {
+      return { encontrado: false, codigo: '', solicitud: null }
+    }
+
     if (!nombreFixer || nombreFixer.trim() === '') {
       return { encontrado: false, codigo: '', solicitud: null }
     }
@@ -393,6 +458,21 @@ export default function SistemaSolicitudes() {
     setDuplicadoDetectado(null)
   }
 
+  const limpiarEstadoSolicitud = () => {
+    setCodigoUnico('-')
+    setEstadoSolicitud('-')
+    setEstadoSolicitudPendiente('')
+    setFechaRegistro('-')
+    setFechaEstimada('-')
+    setSolicitudCreada(false)
+    setDuplicadoDetectado(null)
+    setJsonEnviado('')
+    setRespuestaServidor('')
+    setLogsReintentos([])
+    setMostrarSolicitudesInvalidas(false)
+    setUltimaSolicitudInvalida(null) // Limpiar también la última solicitud inválida
+  }
+
   const calcularSimilitud = (str1: string, str2: string): number => {
     if (str1.length === 0 && str2.length === 0) return 1.0;
     const longer = str1.length > str2.length ? str1 : str2;
@@ -430,6 +510,8 @@ export default function SistemaSolicitudes() {
   };
 
   const verificarDuplicados = (solicitud: Solicitud): Solicitud | null => {
+    if (typeof window === 'undefined') return null;
+    
     const ultimas24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000)
     const solicitudesRecientes = JSON.parse(localStorage.getItem(ULTIMAS_SOLICITUDES_KEY) || '[]')
     
@@ -488,6 +570,8 @@ export default function SistemaSolicitudes() {
   }
 
   const registrarSolicitud = async (solicitud: Solicitud): Promise<Solicitud> => {
+    if (typeof window === 'undefined') return solicitud;
+    
     const solicitudesExistentes: Solicitud[] = JSON.parse(localStorage.getItem(SOLICITUDES_KEY) || '[]')
     const codigoExiste = solicitudesExistentes.some(s => s.codigoUnico === solicitud.codigoUnico)
     
@@ -522,7 +606,6 @@ export default function SistemaSolicitudes() {
       }
     })
     
-    // CAMBIO: No actualizar la UI aquí, solo en enviarMensajes exitoso
     if (solicitud.tieneFixerEspecifico) {
       mostrarMensaje(`Solicitud creada con fixer específico: ${solicitud.nombreFixer}`, 'success', 3000)
     }
@@ -538,7 +621,7 @@ export default function SistemaSolicitudes() {
     setFechaRegistro(solicitud.fechaRegistroStr)
     setFechaEstimada(solicitud.fechaEstimada)
     setCodigoUnico(solicitud.codigoUnico)
-    setSolicitudCreada(true) // Marcar que la solicitud se ha creado
+    setSolicitudCreada(true)
     
     if (solicitud.tieneFixerEspecifico) {
       setEstadoSolicitud(`${solicitud.estado} (Fixer: ${solicitud.nombreFixer})`)
@@ -622,6 +705,19 @@ export default function SistemaSolicitudes() {
           agregarLogReintento(1, 0, `⚠️ Número inválido pero se activarán reintentos`)
           throw new Error(`Validación fallida: ${mensajeError}`)
         } else {
+          // GUARDAR SOLICITUD INVÁLIDA
+          const solicitudInvalida: SolicitudInvalida = {
+            codigoUnico: solicitud.codigoUnico,
+            estado: 'solicitud:invalida',
+            fechaRegistro: solicitud.fechaRegistroStr,
+            fechaEstimada: solicitud.fechaEstimada,
+            motivo: mensajeError,
+            numero: solicitud.numero,
+            servicio: solicitud.servicio,
+            nombreRequester: solicitud.nombreRequester
+          }
+          guardarSolicitudInvalida(solicitudInvalida)
+          
           mostrarMensaje(`✅ Solicitud registrada (${solicitud.codigoUnico}), pero ${mensajeError.toLowerCase()}`, 'advertencia')
           
           guardarLogVerificacion({
@@ -651,7 +747,6 @@ export default function SistemaSolicitudes() {
       const tiempoEnvio = Date.now() - inicioEnvio
       console.log(`Tiempo de envío: ${tiempoEnvio}ms`)
       
-      // CAMBIO: Actualizar UI solo cuando el envío es exitoso
       actualizarUI(solicitud)
       mostrarMensaje('✅ Solicitud registrada y mensaje enviado exitosamente!', 'success')
       return
@@ -666,6 +761,19 @@ export default function SistemaSolicitudes() {
         agregarLogReintento(1, 0, `❌ ERROR 400: ${deteccionError.mensaje}`)
         
         if (!deteccionError.requiereReintentos) {
+          // GUARDAR SOLICITUD INVÁLIDA
+          const solicitudInvalida: SolicitudInvalida = {
+            codigoUnico: solicitud.codigoUnico,
+            estado: 'solicitud:invalida',
+            fechaRegistro: solicitud.fechaRegistroStr,
+            fechaEstimada: solicitud.fechaEstimada,
+            motivo: deteccionError.mensaje,
+            numero: solicitud.numero,
+            servicio: solicitud.servicio,
+            nombreRequester: solicitud.nombreRequester
+          }
+          guardarSolicitudInvalida(solicitudInvalida)
+          
           mostrarMensaje(`✅ Solicitud registrada (${solicitud.codigoUnico}), pero ${deteccionError.mensaje.toLowerCase()}`, 'advertencia')
           return
         }
@@ -691,6 +799,19 @@ export default function SistemaSolicitudes() {
           if (intento === 2) {
             const validacionReintento = validarCanal(solicitud.numero)
             if (!validacionReintento.valido && !validacionReintento.requiereReintentos) {
+              // GUARDAR SOLICITUD INVÁLIDA
+              const solicitudInvalida: SolicitudInvalida = {
+                codigoUnico: solicitud.codigoUnico,
+                estado: 'solicitud:invalida',
+                fechaRegistro: solicitud.fechaRegistroStr,
+                fechaEstimada: solicitud.fechaEstimada,
+                motivo: validacionReintento.error?.mensaje || 'Error de canal',
+                numero: solicitud.numero,
+                servicio: solicitud.servicio,
+                nombreRequester: solicitud.nombreRequester
+              }
+              guardarSolicitudInvalida(solicitudInvalida)
+              
               agregarLogReintento(intento, tiempoEspera, `❌ CANAL INVÁLIDO EN REINTENTO: ${validacionReintento.error?.mensaje}`)
               mostrarMensaje(`✅ Solicitud registrada (${solicitud.codigoUnico}), pero ${validacionReintento.error?.mensaje?.toLowerCase()}`, 'advertencia')
               return
@@ -702,7 +823,6 @@ export default function SistemaSolicitudes() {
           
           agregarLogReintento(intento, tiempoEspera, '✅ REINTENTO EXITOSO', tiempoRespuesta)
           
-          // CAMBIO: Actualizar UI solo cuando el reintento es exitoso
           actualizarUI(solicitud)
           mostrarMensaje('✅ Solicitud registrada y mensaje enviado exitosamente!', 'success')
           return
@@ -726,9 +846,7 @@ export default function SistemaSolicitudes() {
   const procesarSolicitud = async () => {
     setProcesando(true)
     limpiarMensajes()
-    setJsonEnviado('')
-    setRespuestaServidor('')
-    setLogsReintentos([])
+    limpiarEstadoSolicitud()
 
     try {
       if (!validarDatos()) {
@@ -826,7 +944,6 @@ export default function SistemaSolicitudes() {
       )}
 
       <div className="status-section">
-        {/* DETALLE MEJORADO: Solo mostrar Código Único cuando se haya creado la solicitud */}
         {solicitudCreada ? (
           <div className="status-item">
             <div className="status-label">Código Único</div>
@@ -839,7 +956,6 @@ export default function SistemaSolicitudes() {
           </div>
         )}
         
-        {/* DETALLE MEJORADO: Solo mostrar Estado cuando se haya creado la solicitud */}
         {solicitudCreada ? (
           <div className="status-item">
             <div className="status-label">Estado</div>
@@ -852,7 +968,6 @@ export default function SistemaSolicitudes() {
           </div>
         )}
         
-        {/* DETALLE MEJORADO: Solo mostrar Solicitud cuando se haya creado la solicitud */}
         {solicitudCreada ? (
           <div className="status-item">
             <div className="status-label">Solicitud</div>
@@ -867,7 +982,6 @@ export default function SistemaSolicitudes() {
           </div>
         )}
         
-        {/* DETALLE MEJORADO: Solo mostrar Fecha Registro cuando se haya creado la solicitud */}
         {solicitudCreada ? (
           <div className="status-item">
             <div className="status-label">Fecha Registro</div>
@@ -880,7 +994,6 @@ export default function SistemaSolicitudes() {
           </div>
         )}
         
-        {/* DETALLE MEJORADO: Solo mostrar Fecha Estimada cuando se haya creado la solicitud */}
         {solicitudCreada ? (
           <div className="status-item">
             <div className="status-label">Fecha Estimada</div>
@@ -897,6 +1010,50 @@ export default function SistemaSolicitudes() {
       {mensajeSistema && (
         <div className={`system-message message-${tipoMensaje}`}>
           {mensajeSistema}
+        </div>
+      )}
+
+      {/* SECCIÓN DE ÚLTIMA SOLICITUD INVÁLIDA - SOLO SE MUESTRA CUANDO mostrarSolicitudesInvalidas ES true */}
+      {mostrarSolicitudesInvalidas && ultimaSolicitudInvalida && (
+        <div className="glass-card" style={{border: '2px solid #ef4444', background: 'rgba(239, 68, 68, 0.05)', marginTop: '2rem'}}>
+          <h2 className="card-title" style={{color: '#ef4444', display: 'flex', alignItems: 'center', gap: '10px'}}>
+            <FaTimesCircle className="h-6 w-6" />
+            Última Solicitud Inválida
+          </h2>
+          <p style={{color: '#ef4444', marginBottom: '1rem', fontSize: '0.9rem'}}>
+            La siguiente solicitud no pudo ser enviada debido a problemas con el canal de comunicación:
+          </p>
+          <div style={{overflowX: 'auto'}}>
+            <table style={{width: '100%', borderCollapse: 'collapse', marginTop: '1rem'}}>
+              <thead>
+                <tr style={{backgroundColor: 'rgba(239, 68, 68, 0.1)'}}>
+                  <th style={{padding: '12px', textAlign: 'left', borderBottom: '1px solid #ef4444', color: '#ef4444'}}>Código</th>
+                  <th style={{padding: '12px', textAlign: 'left', borderBottom: '1px solid #ef4444', color: '#ef4444'}}>Estado</th>
+                  <th style={{padding: '12px', textAlign: 'left', borderBottom: '1px solid #ef4444', color: '#ef4444'}}>Fecha Registro</th>
+                  <th style={{padding: '12px', textAlign: 'left', borderBottom: '1px solid #ef4444', color: '#ef4444'}}>Fecha Estimada</th>
+                  <th style={{padding: '12px', textAlign: 'left', borderBottom: '1px solid #ef4444', color: '#ef4444'}}>Motivo</th>
+                  <th style={{padding: '12px', textAlign: 'left', borderBottom: '1px solid #ef4444', color: '#ef4444'}}>Número</th>
+                  <th style={{padding: '12px', textAlign: 'left', borderBottom: '1px solid #ef4444', color: '#ef4444'}}>Servicio</th>
+                  <th style={{padding: '12px', textAlign: 'left', borderBottom: '1px solid #ef4444', color: '#ef4444'}}>Cliente</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{borderBottom: '1px solid rgba(239, 68, 68, 0.3)'}}>
+                  <td style={{padding: '12px', color: '#ef4444', fontWeight: 'bold'}}>{ultimaSolicitudInvalida.codigoUnico}</td>
+                  <td style={{padding: '12px', color: '#ef4444'}}>{ultimaSolicitudInvalida.estado}</td>
+                  <td style={{padding: '12px', color: '#ef4444'}}>{ultimaSolicitudInvalida.fechaRegistro}</td>
+                  <td style={{padding: '12px', color: '#ef4444'}}>{ultimaSolicitudInvalida.fechaEstimada}</td>
+                  <td style={{padding: '12px', color: '#ef4444'}}>{ultimaSolicitudInvalida.motivo}</td>
+                  <td style={{padding: '12px', color: '#ef4444'}}>{ultimaSolicitudInvalida.numero}</td>
+                  <td style={{padding: '12px', color: '#ef4444'}}>{ultimaSolicitudInvalida.servicio}</td>
+                  <td style={{padding: '12px', color: '#ef4444'}}>{ultimaSolicitudInvalida.nombreRequester}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div style={{marginTop: '1rem', fontSize: '0.9rem', color: '#ef4444', textAlign: 'center'}}>
+            Mostrando 1 solicitud inválida
+          </div>
         </div>
       )}
 
