@@ -70,6 +70,10 @@ export default function Page() {
   });
   const [isSubmitting,setIsSubmitting] = useState(false);
 
+  // Estados para mostrar/ocultar nombres
+  const [showFixer, setShowFixer] = useState(false);
+  const [showRequester, setShowRequester] = useState(false);
+
   const [citas,setCitas] = useState<Array<{id:string; titulo:string; cancelada:boolean}>>([
     { id:'26580', titulo:'Revisión eléctrica', cancelada:false },
     { id:'26581', titulo:'Instalación de router', cancelada:false },
@@ -89,7 +93,6 @@ export default function Page() {
     '26585': { fixer: 'Elena', requester: 'Laura' },
   };
 
-  // Cargar citas canceladas guardadas
   useEffect(()=>{
     if(typeof window!=='undefined'){
       const saved = localStorage.getItem('citas_canceladas');
@@ -119,7 +122,6 @@ export default function Page() {
     setFormData(prev=>({...prev,[name]:value}));
   };
 
-  // Cancelar cita: autocompleta idCita y nombres fijos
   const handleCancelarDesdeLista = (idCita:string)=>{
     const cita = citas.find(c=>c.id===idCita);
     if(!cita) return;
@@ -168,6 +170,8 @@ export default function Page() {
       alert(result.message);
       marcarCancelada(formData.idCita);
       setFormData({idCita:'', nombreFixer:'', regionTelefono:'', numeroTelefono:'', nombreRequester:'', titulo:'', descripcion:'', enlace:''});
+      setShowFixer(false);
+      setShowRequester(false);
     }else{
       alert(`Fallo: ${result.message}`);
     }
@@ -178,6 +182,8 @@ export default function Page() {
     setCitas(prev=>prev.map(c=>({...c, cancelada:false})));
     localStorage.removeItem('citas_canceladas');
     localStorage.removeItem('citas_tiempos');
+    setShowFixer(false);
+    setShowRequester(false);
   };
 
   return(
@@ -215,21 +221,48 @@ export default function Page() {
               <label className="font-medium text-gray-700 w-28">ID de Cita:</label>
               <input type="text" name="idCita" value={formData.idCita} readOnly className="flex-1 px-4 py-2 border rounded-lg bg-gray-100 cursor-not-allowed"/>
             </div>
+
             <fieldset className="border border-indigo-200 p-4 rounded-lg space-y-4">
               <legend className="px-2 text-indigo-600 font-semibold text-lg">Datos del Fixer</legend>
-              <input placeholder="Nombre Fixer" name="nombreFixer" value={enmascararNombre(formData.nombreFixer)} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg" required/>
+              <div className="relative">
+                <input
+                  placeholder="Nombre Fixer"
+                  name="nombreFixer"
+                  value={showFixer ? formData.nombreFixer : enmascararNombre(formData.nombreFixer)}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  required
+                />
+                <button type="button" onClick={()=>setShowFixer(prev=>!prev)} className="absolute right-2 top-1/2 transform -translate-y-1/2 text-sm text-indigo-600">
+                  {showFixer ? 'Ocultar' : 'Mostrar'}
+                </button>
+              </div>
               <div className="flex space-x-4">
                 <input placeholder="Región +XX" name="regionTelefono" value={formData.regionTelefono} onChange={handleChange} className="w-1/4 px-3 py-2 border rounded-lg text-center" required/>
                 <input placeholder="Número" name="numeroTelefono" value={formData.numeroTelefono} onChange={handleChange} className="w-3/4 px-4 py-2 border rounded-lg" required/>
               </div>
             </fieldset>
+
             <fieldset className="border border-purple-200 p-4 rounded-lg space-y-4">
               <legend className="px-2 text-purple-600 font-semibold text-lg">Datos del Requester y Solicitud</legend>
-              <input placeholder="Nombre Requester" name="nombreRequester" value={enmascararNombre(formData.nombreRequester)} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg" required/>
+              <div className="relative">
+                <input
+                  placeholder="Nombre Requester"
+                  name="nombreRequester"
+                  value={showRequester ? formData.nombreRequester : enmascararNombre(formData.nombreRequester)}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  required
+                />
+                <button type="button" onClick={()=>setShowRequester(prev=>!prev)} className="absolute right-2 top-1/2 transform -translate-y-1/2 text-sm text-purple-600">
+                  {showRequester ? 'Ocultar' : 'Mostrar'}
+                </button>
+              </div>
               <input placeholder="Título" name="titulo" value={formData.titulo} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg" required/>
               <textarea placeholder="Descripción" name="descripcion" value={formData.descripcion} onChange={handleChange} rows={4} className="w-full px-4 py-2 border rounded-lg" required/>
               <input placeholder="Enlace (URL)" name="enlace" value={formData.enlace} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg"/>
             </fieldset>
+
             <button type="submit" disabled={isSubmitting} className="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg">{isSubmitting?'Enviando...':'Enviar Solicitud'}</button>
           </form>
         </section>
