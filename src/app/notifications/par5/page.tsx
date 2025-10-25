@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-//import { API_CONFIG } from './config';
-
 
 // Interfaces
 interface Fixer {
@@ -20,7 +18,7 @@ interface Solicitud {
   servicio: string;
   urlSolicitud: string;
   fecha: string;
-  fixer: Fixer; // Fixer asignado a esta solicitud
+  fixer: Fixer; 
 }
 
 interface LogEntry {
@@ -40,7 +38,7 @@ interface LogEntry {
 const ADMIN_INFO = {
   nombre: 'Administrador ServiNeo',
   codigoPais: '+591',
-  numero: '69542509' // Número actualizado del administrador
+  numero: '69542509'
 };
 
 export default function SimulationHU3() {
@@ -108,36 +106,87 @@ export default function SimulationHU3() {
     urlSolicitud: '',
     fixerCodigoPais: '+591',
     fixerNumero: ''
-    // Removido: fixerNombre ya no es editable
   });
+
+  // Estados para validación en tiempo real
+  const [erroresEdicion, setErroresEdicion] = useState<{
+    numero: string;
+    fixerNumero: string;
+    urlSolicitud: string;
+  }>({
+    numero: '',
+    fixerNumero: '',
+    urlSolicitud: ''
+  });
+
+  const [errorMotivoRechazo, setErrorMotivoRechazo] = useState('');
 
   // Estados para logs y reintentos
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [modalLogsVisible, setModalLogsVisible] = useState(false);
   const [reintentoPendiente, setReintentoPendiente] = useState<{solicitud: Solicitud, estado: 'aceptada' | 'rechazada', motivo: string} | null>(null);
   const [reintentosCount, setReintentosCount] = useState<{[key: string]: number}>({});
+  const [reintentoAutomatico, setReintentoAutomatico] = useState<boolean>(false);
 
   // Validaciones
   const validarMotivo = (texto: string): boolean => {
     const regex = /^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s.,!?¿¡()\-]*$/;
-    return regex.test(texto) && texto.length <= 100; // Cambiado de 500 a 100
+    return regex.test(texto) && texto.length <= 70;
   };
 
   const validarNumero = (numero: string): boolean => {
-    const regex = /^\d{1,8}$/;
+    const regex = /^\d{7,8}$/;
     return regex.test(numero);
   };
 
   const validarCodigoPais = (codigo: string): boolean => {
-    return ['+591', '+51', '+57', '+58'].includes(codigo);
+    return codigo === '+591';
   };
 
-  const validarFecha = (fecha: string): boolean => {
-    const regex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!regex.test(fecha)) return false;
-    
-    const date = new Date(fecha);
-    return date instanceof Date && !isNaN(date.getTime());
+  // Función para validación en tiempo real
+  const validarCampoEnTiempoReal = (campo: string, valor: string) => {
+    switch (campo) {
+      case 'numero':
+        if (!valor.trim()) {
+          setErroresEdicion(prev => ({ ...prev, numero: '❌ El número del cliente es obligatorio' }));
+        } else if (!validarNumero(valor)) {
+          setErroresEdicion(prev => ({ ...prev, numero: '❌ Debe tener 7 u 8 dígitos' }));
+        } else {
+          setErroresEdicion(prev => ({ ...prev, numero: '' }));
+        }
+        break;
+
+      case 'fixerNumero':
+        if (!valor.trim()) {
+          setErroresEdicion(prev => ({ ...prev, fixerNumero: '❌ El número del fixer es obligatorio' }));
+        } else if (!validarNumero(valor)) {
+          setErroresEdicion(prev => ({ ...prev, fixerNumero: '❌ Debe tener 7 u 8 dígitos' }));
+        } else {
+          setErroresEdicion(prev => ({ ...prev, fixerNumero: '' }));
+        }
+        break;
+
+      case 'urlSolicitud':
+        if (!valor.trim()) {
+          setErroresEdicion(prev => ({ ...prev, urlSolicitud: '❌ La URL es obligatoria' }));
+        } else {
+          setErroresEdicion(prev => ({ ...prev, urlSolicitud: '' }));
+        }
+        break;
+
+      case 'motivoRechazo':
+        if (!valor.trim()) {
+          setErrorMotivoRechazo('❌ El motivo del rechazo es obligatorio');
+        } else if (!validarMotivo(valor)) {
+          setErrorMotivoRechazo('❌ Caracteres no permitidos o excede 70 caracteres');
+        } else {
+          setErrorMotivoRechazo('');
+        }
+        break;
+
+      default:
+        break;
+    }
   };
 
   // Función para agregar logs
@@ -155,6 +204,18 @@ export default function SimulationHU3() {
     setAlerta({ tipo, mensaje });
     setTimeout(() => setAlerta(null), 5000);
   };
+
+  // Función para reintento automático
+  useEffect(() => {
+    if (reintentoAutomatico && reintentoPendiente) {
+      const timer = setTimeout(() => {
+        console.log('🔄 Reintento automático iniciado...');
+        reintentarEnvio();
+      }, 3000); // Reintenta después de 3 segundos
+
+      return () => clearTimeout(timer);
+    }
+  }, [reintentoAutomatico, reintentoPendiente]);
 
   // Función para enviar mensaje al administrador después de 3 reintentos
   const enviarMensajeAlAdministrador = async (solicitud: Solicitud, errorCount: number, estado: 'aceptada' | 'rechazada') => {
@@ -333,8 +394,15 @@ ${solicitud.urlSolicitud}`;
       urlSolicitud: solicitud.urlSolicitud,
       fixerCodigoPais: solicitud.fixer.codigoPais,
       fixerNumero: solicitud.fixer.numero
-      // No incluimos fixerNombre ya que no es editable
     });
+    
+    // Resetear errores al abrir
+    setErroresEdicion({
+      numero: '',
+      fixerNumero: '',
+      urlSolicitud: ''
+    });
+    
     setModalEdicionVisible(true);
     
     agregarLog({
@@ -350,51 +418,43 @@ ${solicitud.urlSolicitud}`;
   const guardarEdicion = () => {
     if (!editandoSolicitud) return;
 
-    if (!validarNumero(formEdicion.numero)) {
-      mostrarAlerta('error', '❌ Número del cliente inválido. Solo números (máx 8 dígitos)');
+    // Validar que no haya errores antes de guardar
+    const hayErrores = Object.values(erroresEdicion).some(error => error !== '');
+    const camposVacios = !formEdicion.numero.trim() || !formEdicion.fixerNumero.trim() || !formEdicion.urlSolicitud.trim();
+
+    if (hayErrores || camposVacios) {
+      // Forzar validación de todos los campos
+      validarCampoEnTiempoReal('numero', formEdicion.numero);
+      validarCampoEnTiempoReal('fixerNumero', formEdicion.fixerNumero);
+      validarCampoEnTiempoReal('urlSolicitud', formEdicion.urlSolicitud);
+      
+      mostrarAlerta('error', '❌ Por favor corrige los errores en el formulario');
       return;
     }
 
-    if (!validarNumero(formEdicion.fixerNumero)) {
-      mostrarAlerta('error', '❌ Número del fixer inválido. Solo números (máx 8 dígitos)');
+    // Validar que haya cambios
+    const mismoCodigoPais = formEdicion.codigoPais.trim() === editandoSolicitud.codigoPais.trim();
+    const mismoNumero = formEdicion.numero.trim() === editandoSolicitud.numero.trim();
+    const mismaUrl = formEdicion.urlSolicitud.trim() === editandoSolicitud.urlSolicitud.trim();
+    const mismoFixerCodigo = formEdicion.fixerCodigoPais.trim() === editandoSolicitud.fixer.codigoPais.trim();
+    const mismoFixerNumero = formEdicion.fixerNumero.trim() === editandoSolicitud.fixer.numero.trim();
+
+    const sinCambios = (
+      mismoCodigoPais &&
+      mismoNumero &&
+      mismaUrl &&
+      mismoFixerCodigo &&
+      mismoFixerNumero
+    );
+
+    if (sinCambios) {
+      mostrarAlerta('error', '⚠️ No se detectaron cambios para guardar');
+      setModalEdicionVisible(false);
+      setEditandoSolicitud(null);
       return;
     }
 
-    if (!validarCodigoPais(formEdicion.codigoPais)) {
-      mostrarAlerta('error', '❌ Código de país del cliente no válido');
-      return;
-    }
-
-    if (!validarCodigoPais(formEdicion.fixerCodigoPais)) {
-      mostrarAlerta('error', '❌ Código de país del fixer no válido');
-      return;
-    }
-
-    if (!formEdicion.urlSolicitud.trim()) {
-      mostrarAlerta('error', '❌ URL de solicitud es obligatoria');
-      return;
-    }
-  const mismoCodigoPais = formEdicion.codigoPais.trim() === editandoSolicitud.codigoPais.trim();
-  const mismoNumero = formEdicion.numero.trim() === editandoSolicitud.numero.trim();
-  const mismaUrl = formEdicion.urlSolicitud.trim() === editandoSolicitud.urlSolicitud.trim();
-  const mismoFixerCodigo = formEdicion.fixerCodigoPais.trim() === editandoSolicitud.fixer.codigoPais.trim();
-  const mismoFixerNumero = formEdicion.fixerNumero.trim() === editandoSolicitud.fixer.numero.trim();
-
-  const sinCambios = (
-    mismoCodigoPais &&
-    mismoNumero &&
-    mismaUrl &&
-    mismoFixerCodigo &&
-    mismoFixerNumero
-  );
-
-  if (sinCambios) {
-    mostrarAlerta('error', '⚠️ No se detectaron cambios para guardar');
-    setModalEdicionVisible(false);
-    setEditandoSolicitud(null);
-    return;
-  }
-
+    // Si pasa todas las validaciones, guardar
     setSolicitudes(prev => 
       prev.map(s => 
         s.id === editandoSolicitud?.id 
@@ -404,7 +464,7 @@ ${solicitud.urlSolicitud}`;
               numero: formEdicion.numero,
               urlSolicitud: formEdicion.urlSolicitud.trim(),
               fixer: {
-                nombre: s.fixer.nombre, // Mantener el nombre original (no editable)
+                nombre: s.fixer.nombre,
                 codigoPais: formEdicion.fixerCodigoPais,
                 numero: formEdicion.fixerNumero
               }
@@ -434,14 +494,16 @@ ${solicitud.urlSolicitud}`;
     motivoRechazo: string
   ) => {
     // Validaciones antes de enviar
-    if (estado === 'rechazada' && !motivoRechazo.trim()) {
-      mostrarAlerta('error', '❌ Debes especificar un motivo para el rechazo');
-      return;
-    }
-
-    if (!validarMotivo(motivoRechazo)) {
-      mostrarAlerta('error', '❌ Motivo contiene caracteres no permitidos o excede el límite de 100 caracteres');
-      return;
+    if (estado === 'rechazada') {
+      if (!motivoRechazo.trim()) {
+        setErrorMotivoRechazo('❌ El motivo del rechazo es obligatorio');
+        mostrarAlerta('error', '❌ Debes especificar un motivo para el rechazo');
+        return;
+      }
+      if (!validarMotivo(motivoRechazo)) {
+        mostrarAlerta('error', '❌ Motivo contiene caracteres no permitidos o excede el límite de 70 caracteres');
+        return;
+      }
     }
 
     setModalLoading(true);
@@ -545,6 +607,7 @@ Lamentamos informarte que tu solicitud ha sido rechazada.
         mostrarAlerta('success', '✅ Mensaje enviado correctamente');
         setTimeout(() => closeModal(), 1000);
         setReintentoPendiente(null);
+        setReintentoAutomatico(false);
       } else {
         throw new Error(data.mensaje || 'Error en la respuesta del servidor');
       }
@@ -570,8 +633,12 @@ Lamentamos informarte que tu solicitud ha sido rechazada.
         
         // Mostrar alerta especial para el usuario
         mostrarAlerta('error', `❌ No se pudo enviar el mensaje después de ${newCount} intentos. El administrador ha sido notificado.`);
+        setReintentoAutomatico(false);
       } else {
-        mostrarAlerta('error', mensajeError);
+        mostrarAlerta('error', `${mensajeError} (Intento ${newCount}/3 - Reintentando automáticamente...)`);
+        
+        // Activar reintento automático
+        setReintentoAutomatico(true);
       }
 
       agregarLog({
@@ -595,6 +662,7 @@ Lamentamos informarte que tu solicitud ha sido rechazada.
       } else {
         // Limpiar reintento pendiente después del 3er intento
         setReintentoPendiente(null);
+        setReintentoAutomatico(false);
       }
     } finally {
       setModalLoading(false);
@@ -604,6 +672,7 @@ Lamentamos informarte que tu solicitud ha sido rechazada.
   // Función para reintentar envío
   const reintentarEnvio = () => {
     if (reintentoPendiente) {
+      console.log(`🔄 Reintentando envío para SOL-${reintentoPendiente.solicitud.id}...`);
       enviarMensaje(
         reintentoPendiente.estado,
         reintentoPendiente.solicitud,
@@ -616,6 +685,7 @@ Lamentamos informarte que tu solicitud ha sido rechazada.
     setSolicitudActual(solicitud);
     setEstadoActual(estado);
     setMotivoRechazo('');
+    setErrorMotivoRechazo('');
     setModalVisible(true);
   };
 
@@ -623,6 +693,7 @@ Lamentamos informarte que tu solicitud ha sido rechazada.
     setSolicitudActual(null);
     setEstadoActual(null);
     setMotivoRechazo('');
+    setErrorMotivoRechazo('');
     setModalVisible(false);
   };
 
@@ -666,11 +737,14 @@ Lamentamos informarte que tu solicitud ha sido rechazada.
         <div className="max-w-6xl mx-auto mb-4 bg-[#FEF3C7] border border-[#D97706] rounded-lg p-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
-              <p className="text-[#92400E] font-medium">⚠️ Envío pendiente</p>
+              <p className="text-[#92400E] font-medium">
+                {reintentoAutomatico ? '🔄 Reintento automático en progreso...' : '⚠️ Envío pendiente'}
+              </p>
               <p className="text-[#92400E] text-sm">
                 No se pudo enviar el mensaje para SOL-{reintentoPendiente.solicitud.id} 
                 (Fixer: {reintentoPendiente.solicitud.fixer.nombre})
                 (Intento {reintentosCount[reintentoPendiente.solicitud.id] || 1}/3)
+                {reintentoAutomatico && ' - Reintentando en 3 segundos...'}
               </p>
             </div>
             <div className="flex gap-2">
@@ -678,10 +752,13 @@ Lamentamos informarte que tu solicitud ha sido rechazada.
                 onClick={reintentarEnvio}
                 className="bg-[#DC2626] text-white px-3 py-1 rounded text-sm hover:bg-[#B91C1C]"
               >
-                Reintentar
+                Reintentar ahora
               </button>
               <button
-                onClick={() => setReintentoPendiente(null)}
+                onClick={() => {
+                  setReintentoPendiente(null);
+                  setReintentoAutomatico(false);
+                }}
                 className="bg-[#6B7280] text-white px-3 py-1 rounded text-sm hover:bg-[#4B5563]"
               >
                 Descartar
@@ -815,31 +892,34 @@ Lamentamos informarte que tu solicitud ha sido rechazada.
                 <label htmlFor="motivo-rechazo" className="block text-sm font-medium text-[#111827] mb-2">
                   Motivo del rechazo:
                   <span className="text-xs text-gray-500 ml-1">
-                    ({motivoRechazo.length}/100) - Solo letras y números
+                    ({motivoRechazo.length}/70) - Solo letras y números
                   </span>
                 </label>
                 <textarea
                   id="motivo-rechazo"
                   value={motivoRechazo}
                   onChange={(e) => {
-                    if (validarMotivo(e.target.value) || e.target.value === '') {
-                      setMotivoRechazo(e.target.value);
-                    }
+                    const valor = e.target.value;
+                    setMotivoRechazo(valor);
+                    validarCampoEnTiempoReal('motivoRechazo', valor);
                   }}
+                  onBlur={(e) => validarCampoEnTiempoReal('motivoRechazo', e.target.value)}
                   placeholder="Escribe el motivo del rechazo..."
                   title="Campo para escribir el motivo del rechazo de la solicitud"
                   aria-label="Motivo del rechazo"
                   aria-describedby="motivo-help"
-                  className="w-full border border-[#D1D5DB] rounded-lg p-3 resize-none focus:ring-2 focus:ring-[#2B31E0] focus:border-[#2B31E0] text-[#111827] text-sm"
+                  className={`w-full border rounded-lg p-3 resize-none focus:ring-2 focus:ring-[#2B31E0] focus:border-[#2B31E0] text-[#111827] text-sm ${
+                    errorMotivoRechazo ? 'border-red-500' : 'border-[#D1D5DB]'
+                  }`}
                   rows={4}
-                  maxLength={100}
+                  maxLength={70}
                 />
                 <p id="motivo-help" className="text-xs text-gray-500 mt-1">
                   Describe el motivo del rechazo. Solo se permiten letras, números y signos básicos.
                 </p>
-                {!validarMotivo(motivoRechazo) && motivoRechazo.length > 0 && (
+                {errorMotivoRechazo && (
                   <p className="text-red-500 text-xs mt-1" role="alert">
-                    Caracteres no permitidos detectados
+                    {errorMotivoRechazo}
                   </p>
                 )}
               </div>
@@ -858,7 +938,7 @@ Lamentamos informarte que tu solicitud ha sido rechazada.
                 onClick={() =>
                   enviarMensaje(estadoActual, solicitudActual, motivoRechazo)
                 }
-                disabled={modalLoading || (estadoActual === 'rechazada' && !motivoRechazo.trim())}
+                disabled={modalLoading || (estadoActual === 'rechazada' && (errorMotivoRechazo !== '' || !motivoRechazo.trim()))}
                 className={`${
                   estadoActual === 'aceptada'
                     ? 'bg-[#16A34A] hover:bg-opacity-90'
@@ -962,20 +1042,17 @@ Lamentamos informarte que tu solicitud ha sido rechazada.
                       id="edit-codigo-pais"
                       value={formEdicion.codigoPais}
                       onChange={(e) => setFormEdicion(prev => ({...prev, codigoPais: e.target.value}))}
-                      title="Selecciona el código de país del cliente"
+                      title="Código de país del cliente"
                       aria-label="Código de país del cliente"
                       className="w-full border border-[#D1D5DB] rounded-lg p-3 focus:ring-2 focus:ring-[#2B31E0] focus:border-[#2B31E0] text-[#111827]"
                     >
-                      <option value="+591">+591 (BO)</option>
-                      <option value="+51">+51 (PE)</option>
-                      <option value="+57">+57 (CO)</option>
-                      <option value="+58">+58 (VE)</option>
+                      <option value="+591">+591 (Bolivia)</option>
                     </select>
                   </div>
                   <div className="col-span-2">
                     <label htmlFor="edit-numero" className="block text-sm font-medium text-[#111827] mb-1">
                       Número Cliente
-                      <span className="text-xs text-gray-500 ml-1">(solo números, máx 8 dígitos)</span>
+                      <span className="text-xs text-gray-500 ml-1">(solo números, 7 u 8 dígitos)</span>
                     </label>
                     <input
                       id="edit-numero"
@@ -984,16 +1061,25 @@ Lamentamos informarte que tu solicitud ha sido rechazada.
                       onChange={(e) => {
                         const valor = e.target.value.replace(/[^\d]/g, '').slice(0, 8);
                         setFormEdicion(prev => ({...prev, numero: valor}));
+                        validarCampoEnTiempoReal('numero', valor);
                       }}
+                      onBlur={(e) => validarCampoEnTiempoReal('numero', e.target.value)}
                       title="Número de teléfono del cliente"
                       aria-label="Número de teléfono del cliente"
                       aria-describedby="numero-help"
-                      className="w-full border border-[#D1D5DB] rounded-lg p-3 focus:ring-2 focus:ring-[#2B31E0] focus:border-[#2B31E0] text-[#111827]"
+                      className={`w-full border rounded-lg p-3 focus:ring-2 focus:ring-[#2B31E0] focus:border-[#2B31E0] text-[#111827] ${
+                        erroresEdicion.numero ? 'border-red-500' : 'border-[#D1D5DB]'
+                      }`}
                       placeholder="77777777"
                     />
                     <p id="numero-help" className="text-xs text-gray-500 mt-1">
-                      Ingresa solo números, máximo 8 dígitos
+                      Ingresa solo números, 7 u 8 dígitos
                     </p>
+                    {erroresEdicion.numero && (
+                      <p className="text-red-500 text-xs mt-1" role="alert">
+                        {erroresEdicion.numero}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -1005,16 +1091,27 @@ Lamentamos informarte que tu solicitud ha sido rechazada.
                     id="edit-url"
                     type="text"
                     value={formEdicion.urlSolicitud}
-                    onChange={(e) => setFormEdicion(prev => ({...prev, urlSolicitud: e.target.value}))}
+                    onChange={(e) => {
+                      setFormEdicion(prev => ({...prev, urlSolicitud: e.target.value}));
+                      validarCampoEnTiempoReal('urlSolicitud', e.target.value);
+                    }}
+                    onBlur={(e) => validarCampoEnTiempoReal('urlSolicitud', e.target.value)}
                     title="URL de la solicitud"
                     aria-label="URL de la solicitud"
                     aria-describedby="url-help"
-                    className="w-full border border-[#D1D5DB] rounded-lg p-3 focus:ring-2 focus:ring-[#2B31E0] focus:border-[#2B31E0] text-[#111827]"
+                    className={`w-full border rounded-lg p-3 focus:ring-2 focus:ring-[#2B31E0] focus:border-[#2B31E0] text-[#111827] ${
+                      erroresEdicion.urlSolicitud ? 'border-red-500' : 'border-[#D1D5DB]'
+                    }`}
                     placeholder="https://servineo.com/solicitud/001"
                   />
                   <p id="url-help" className="text-xs text-gray-500 mt-1">
                     URL completa de la solicitud
                   </p>
+                  {erroresEdicion.urlSolicitud && (
+                    <p className="text-red-500 text-xs mt-1" role="alert">
+                      {erroresEdicion.urlSolicitud}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1047,20 +1144,17 @@ Lamentamos informarte que tu solicitud ha sido rechazada.
                       id="edit-fixer-codigo-pais"
                       value={formEdicion.fixerCodigoPais}
                       onChange={(e) => setFormEdicion(prev => ({...prev, fixerCodigoPais: e.target.value}))}
-                      title="Selecciona el código de país del fixer"
+                      title="Código de país del fixer"
                       aria-label="Código de país del fixer"
                       className="w-full border border-[#D1D5DB] rounded-lg p-3 focus:ring-2 focus:ring-[#2B31E0] focus:border-[#2B31E0] text-[#111827]"
                     >
-                      <option value="+591">+591 (BO)</option>
-                      <option value="+51">+51 (PE)</option>
-                      <option value="+57">+57 (CO)</option>
-                      <option value="+58">+58 (VE)</option>
+                      <option value="+591">+591 (Bolivia)</option>
                     </select>
                   </div>
                   <div className="col-span-2">
                     <label htmlFor="edit-fixer-numero" className="block text-sm font-medium text-[#111827] mb-1">
                       Número Fixer
-                      <span className="text-xs text-gray-500 ml-1">(solo números, máx 8 dígitos)</span>
+                      <span className="text-xs text-gray-500 ml-1">(solo números, 7 u 8 dígitos)</span>
                     </label>
                     <input
                       id="edit-fixer-numero"
@@ -1069,16 +1163,25 @@ Lamentamos informarte que tu solicitud ha sido rechazada.
                       onChange={(e) => {
                         const valor = e.target.value.replace(/[^\d]/g, '').slice(0, 8);
                         setFormEdicion(prev => ({...prev, fixerNumero: valor}));
+                        validarCampoEnTiempoReal('fixerNumero', valor);
                       }}
+                      onBlur={(e) => validarCampoEnTiempoReal('fixerNumero', e.target.value)}
                       title="Número de teléfono del fixer"
                       aria-label="Número de teléfono del fixer"
                       aria-describedby="fixer-numero-help"
-                      className="w-full border border-[#D1D5DB] rounded-lg p-3 focus:ring-2 focus:ring-[#2B31E0] focus:border-[#2B31E0] text-[#111827]"
+                      className={`w-full border rounded-lg p-3 focus:ring-2 focus:ring-[#2B31E0] focus:border-[#2B31E0] text-[#111827] ${
+                        erroresEdicion.fixerNumero ? 'border-red-500' : 'border-[#D1D5DB]'
+                      }`}
                       placeholder="78888888"
                     />
                     <p id="fixer-numero-help" className="text-xs text-gray-500 mt-1">
-                      Ingresa solo números, máximo 8 dígitos
+                      Ingresa solo números, 7 u 8 dígitos
                     </p>
+                    {erroresEdicion.fixerNumero && (
+                      <p className="text-red-500 text-xs mt-1" role="alert">
+                        {erroresEdicion.fixerNumero}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1093,7 +1196,16 @@ Lamentamos informarte que tu solicitud ha sido rechazada.
               </button>
               <button
                 onClick={guardarEdicion}
-                className="bg-[#2B31E0] text-white px-4 py-2 rounded-lg hover:bg-[#2B6AE0] transition-colors font-medium text-sm flex-1 sm:flex-none"
+                disabled={Object.values(erroresEdicion).some(error => error !== '') || 
+                          !formEdicion.numero.trim() || 
+                          !formEdicion.fixerNumero.trim() || 
+                          !formEdicion.urlSolicitud.trim()}
+                className={`bg-[#2B31E0] text-white px-4 py-2 rounded-lg hover:bg-[#2B6AE0] transition-colors font-medium text-sm flex-1 sm:flex-none ${
+                  (Object.values(erroresEdicion).some(error => error !== '') || 
+                   !formEdicion.numero.trim() || 
+                   !formEdicion.fixerNumero.trim() || 
+                   !formEdicion.urlSolicitud.trim()) ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
               >
                 Guardar
               </button>
