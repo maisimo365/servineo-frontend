@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+
 interface FormData {
   idCita: string;
   nombreFixer: string;
@@ -23,7 +24,7 @@ const ENDPOINT = `${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE_NAM
 async function sendWhatsAppMessage(formData: FormData) {
   const required: (keyof FormData)[] = ['nombreFixer','regionTelefono','numeroTelefono','nombreRequester','titulo','descripcion'];
   for (const f of required) {
-    const val = formData[f];  // ← SIN 'any', usando TypeScript correctamente
+    const val = formData[f];
     if (!val || String(val).trim() === '') return { success:false, message:`Falta el campo: ${f}` };
   }
 
@@ -72,6 +73,17 @@ export default function Page() {
     { id:'26585', titulo:'Prueba adicional', cancelada:false }
   ]);
 
+  // Mapas de nombres fijos por cita
+  const nombresPorCita: Record<string,{fixer:string, requester:string}> = {
+    '26580': { fixer: 'Carlos', requester: 'Luis' },
+    '26581': { fixer: 'María', requester: 'Gabriela' },
+    '26582': { fixer: 'Andrés', requester: 'Ricardo' },
+    '26583': { fixer: 'Lucía', requester: 'Ana' },
+    '26584': { fixer: 'Jorge', requester: 'Sebastián' },
+    '26585': { fixer: 'Elena', requester: 'Laura' },
+  };
+
+  // Cargar citas canceladas guardadas
   useEffect(()=>{
     if(typeof window!=='undefined'){
       const saved = localStorage.getItem('citas_canceladas');
@@ -97,19 +109,28 @@ export default function Page() {
 
   const handleChange = (e:React.ChangeEvent<HTMLInputElement|HTMLTextAreaElement>)=>{
     const {name,value} = e.target;
-    // --- 🔒 Bloquear números en los nombres ---
     if ((name === 'nombreFixer' || name === 'nombreRequester') && /\d/.test(value)) return;
     setFormData(prev=>({...prev,[name]:value}));
   };
 
+  // Cancelar cita: autocompleta idCita y nombres fijos
   const handleCancelarDesdeLista = (idCita:string)=>{
     const cita = citas.find(c=>c.id===idCita);
     if(!cita) return;
-    if(cita.cancelada){ 
-      alert('⚠️ Se canceló recientemente'); 
-      return; 
+    if(cita.cancelada){
+      alert('⚠️ Esta cita ya fue cancelada recientemente');
+      return;
     }
-    setFormData(prev=>({...prev,idCita}));
+
+    const nombres = nombresPorCita[idCita];
+    if(!nombres) return;
+
+    setFormData(prev=>({
+      ...prev,
+      idCita,
+      nombreFixer: nombres.fixer,
+      nombreRequester: nombres.requester,
+    }));
   };
 
   const handleSubmit = async (e:React.FormEvent)=>{
@@ -147,7 +168,6 @@ export default function Page() {
   };
 
   const handleGoHome = ()=> router.push('/');
-
   const resetCitas = ()=>{
     setCitas(prev=>prev.map(c=>({...c, cancelada:false})));
     localStorage.removeItem('citas_canceladas');
@@ -212,5 +232,4 @@ export default function Page() {
       <button onClick={handleGoHome} className="fixed bottom-6 right-6 bg-indigo-600 text-white font-bold py-3 px-5 rounded-full shadow-lg hover:bg-indigo-700">Volver a Principal</button>
     </main>
   );
-  
 }
