@@ -19,13 +19,13 @@ interface FormData {
 const EVOLUTION_API_URL = 'https://n8n-evolution-api.oumu0g.easypanel.host';
 const EVOLUTION_INSTANCE_NAME = 'pruebas';
 const EVOLUTION_API_KEY = '429683C4C977415CAAFCCE10F7D57E11';
-const ENDPOINT = `${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE_NAME}`;
+const ENDPOINT = ${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE_NAME};
 
 async function sendWhatsAppMessage(formData: FormData) {
   const required: (keyof FormData)[] = ['nombreFixer','regionTelefono','numeroTelefono','nombreRequester','titulo','descripcion'];
   for (const f of required) {
     const val = formData[f];
-    if (!val || String(val).trim() === '') return { success:false, message:`Falta el campo: ${f}` };
+    if (!val || String(val).trim() === '') return { success:false, message:Falta el campo: ${f} };
   }
 
   const destinationNumber = (formData.regionTelefono + formData.numeroTelefono).replace('+','');
@@ -50,7 +50,7 @@ Enlace: ${formData.enlace || 'N/A'}
       headers:{ 'Content-Type':'application/json', apikey: EVOLUTION_API_KEY },
       body:JSON.stringify({number:destinationNumber, text:whatsappMessage})
     });
-    if (!response.ok) return { success:false, message:`Error ${response.status}` };
+    if (!response.ok) return { success:false, message:Error ${response.status} };
     const data = await response.json();
     return { success:true, message:'✅ Mensaje enviado.', data };
   } catch(err) { return { success:false, message:'❌ Error de conexión.', details:String(err) }; }
@@ -111,7 +111,13 @@ export default function Page() {
 
   const handleChange = (e:React.ChangeEvent<HTMLInputElement|HTMLTextAreaElement>)=>{
     const {name,value} = e.target;
+
+    // Bloquear números en nombres
     if ((name === 'nombreFixer' || name === 'nombreRequester') && /\d/.test(value)) return;
+
+    // Bloquear letras en teléfono
+    if ((name === 'regionTelefono' || name === 'numeroTelefono') && /[^\d+]/.test(value)) return;
+
     setFormData(prev=>({...prev,[name]:value}));
   };
 
@@ -119,7 +125,7 @@ export default function Page() {
     const cita = citas.find(c=>c.id===idCita);
     if(!cita) return;
     if(cita.cancelada){
-      alert('⚠️ Esta cita ya fue cancelada recientemente');
+      alert('⚠ Esta cita ya fue cancelada recientemente');
       return;
     }
     const nombres = nombresPorCita[idCita];
@@ -140,9 +146,9 @@ export default function Page() {
     e.preventDefault();
     const camposObligatorios = ['nombreFixer','regionTelefono','numeroTelefono','nombreRequester','titulo','descripcion'];
     for(const c of camposObligatorios){
-      if(!formData[c as keyof FormData]?.trim()){ alert('⚠️ Completa todos los campos'); return; }
+      if(!formData[c as keyof FormData]?.trim()){ alert('⚠ Completa todos los campos'); return; }
     }
-    if(!formData.idCita){ alert('⚠️ Selecciona una cita'); return; }
+    if(!formData.idCita){ alert('⚠ Selecciona una cita'); return; }
     if(citas.find(c=>c.id===formData.idCita)?.cancelada){ alert('🚫 Esta cita ya fue cancelada'); return; }
 
     const now = Date.now();
@@ -169,7 +175,7 @@ export default function Page() {
       setShowRequester(false);
       setShowTelefono(false);
     }else{
-      alert(`Fallo: ${result.message}`);
+      alert(Fallo: ${result.message});
     }
   };
 
@@ -182,6 +188,8 @@ export default function Page() {
     setShowRequester(false);
     setShowTelefono(false);
   };
+
+  const todasCanceladas = citas.every(c => c.cancelada);
 
   return(
     <main className="flex min-h-screen p-4 sm:p-8 bg-gray-50">
@@ -208,7 +216,15 @@ export default function Page() {
               </div>
             ))}
           </div>
-          <button onClick={resetCitas} className="mt-4 w-full py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600">Reactivar Todas (testing)</button>
+          <button
+            onClick={resetCitas}
+            disabled={!todasCanceladas}
+            className={`mt-4 w-full py-2 text-white rounded-lg ${
+              todasCanceladas ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-gray-400 cursor-not-allowed'
+            }`}
+          >
+            Reactivar Todas (testing)
+          </button>
         </aside>
 
         <section className="flex-1 bg-white shadow-2xl rounded-xl p-6 border border-gray-100">
@@ -222,7 +238,6 @@ export default function Page() {
             <fieldset className="border border-indigo-200 p-4 rounded-lg space-y-4">
               <legend className="px-2 text-indigo-600 font-semibold text-lg">Datos del Fixer</legend>
 
-              {/* Nombre Fixer */}
               <div className="relative">
                 <input
                   placeholder="Nombre Fixer"
@@ -236,7 +251,6 @@ export default function Page() {
                 <button type="button" onClick={()=>setShowFixer(prev=>!prev)} className="absolute right-2 top-1/2 transform -translate-y-1/2 text-sm text-indigo-600">{showFixer ? 'Ocultar' : 'Mostrar'}</button>
               </div>
 
-              {/* Teléfono */}
               <div className="flex space-x-4">
                 <input
                   placeholder="Región +XX"
@@ -264,7 +278,6 @@ export default function Page() {
             <fieldset className="border border-purple-200 p-4 rounded-lg space-y-4">
               <legend className="px-2 text-purple-600 font-semibold text-lg">Datos del Requester y Solicitud</legend>
 
-              {/* Nombre Requester */}
               <div className="relative">
                 <input
                   placeholder="Nombre Requester"
@@ -283,7 +296,13 @@ export default function Page() {
               <input placeholder="Enlace (URL)" name="enlace" value={formData.enlace} onChange={handleChange} className="w-full px-4 py-2 border rounded-lg"/>
             </fieldset>
 
-            <button type="submit" disabled={isSubmitting} className="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg">{isSubmitting?'Enviando...':'Enviar Solicitud'}</button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg"
+            >
+              {isSubmitting ? 'Enviando...' : 'Cancelar Cita'}
+            </button>
           </form>
         </section>
       </div>
