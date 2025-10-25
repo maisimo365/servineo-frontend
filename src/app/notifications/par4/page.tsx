@@ -19,13 +19,13 @@ interface FormData {
 const EVOLUTION_API_URL = 'https://n8n-evolution-api.oumu0g.easypanel.host';
 const EVOLUTION_INSTANCE_NAME = 'pruebas';
 const EVOLUTION_API_KEY = '429683C4C977415CAAFCCE10F7D57E11';
-const ENDPOINT = ${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE_NAME};
+const ENDPOINT = `${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE_NAME}`;
 
 async function sendWhatsAppMessage(formData: FormData) {
   const required: (keyof FormData)[] = ['nombreFixer','regionTelefono','numeroTelefono','nombreRequester','titulo','descripcion'];
   for (const f of required) {
     const val = formData[f];
-    if (!val || String(val).trim() === '') return { success:false, message:Falta el campo: ${f} };
+    if (!val || String(val).trim() === '') return { success:false, message:`Falta el campo: ${f}` };
   }
 
   const destinationNumber = (formData.regionTelefono + formData.numeroTelefono).replace('+','');
@@ -50,7 +50,7 @@ Enlace: ${formData.enlace || 'N/A'}
       headers:{ 'Content-Type':'application/json', apikey: EVOLUTION_API_KEY },
       body:JSON.stringify({number:destinationNumber, text:whatsappMessage})
     });
-    if (!response.ok) return { success:false, message:Error ${response.status} };
+    if (!response.ok) return { success:false, message:`Error ${response.status}` };
     const data = await response.json();
     return { success:true, message:'✅ Mensaje enviado.', data };
   } catch(err) { return { success:false, message:'❌ Error de conexión.', details:String(err) }; }
@@ -175,7 +175,7 @@ export default function Page() {
       setShowRequester(false);
       setShowTelefono(false);
     }else{
-      alert(Fallo: ${result.message});
+      alert(`Fallo: ${result.message}`);
     }
   };
 
