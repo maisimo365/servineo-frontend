@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { FaArrowLeft, FaExclamationTriangle, FaTimesCircle } from 'react-icons/fa'
 
 // Interfaces y tipos
@@ -95,7 +95,6 @@ const LOGS_VERIFICACION_KEY = 'logs_verificacion_duplicados'
 const SOLICITUDES_INVALIDAS_KEY = 'solicitudes_invalidas'
 
 export default function SistemaSolicitudes() {
-  const router = useRouter()
   const [codigoUnico, setCodigoUnico] = useState('-')
   const [estadoSolicitud, setEstadoSolicitud] = useState('-')
   const [estadoSolicitudPendiente, setEstadoSolicitudPendiente] = useState('')
@@ -107,9 +106,9 @@ export default function SistemaSolicitudes() {
   const [jsonEnviado, setJsonEnviado] = useState('')
   const [respuestaServidor, setRespuestaServidor] = useState('')
   const [logsReintentos, setLogsReintentos] = useState<LogReintento[]>([])
-  const [duplicadoDetectado, setDuplicadoDetectado] = useState<{encontrado: boolean, codigo: string, datos: any} | null>(null)
+  const [duplicadoDetectado, setDuplicadoDetectado] = useState<{encontrado: boolean, codigo: string, datos: Solicitud | null} | null>(null)
   const [solicitudCreada, setSolicitudCreada] = useState(false)
-  const [ultimaSolicitudInvalida, setUltimaSolicitudInvalida] = useState<SolicitudInvalida | null>(null) // CAMBIO: Solo la última
+  const [ultimaSolicitudInvalida, setUltimaSolicitudInvalida] = useState<SolicitudInvalida | null>(null)
   const [mostrarSolicitudesInvalidas, setMostrarSolicitudesInvalidas] = useState(false)
 
   const [formData, setFormData] = useState<FormData>({
@@ -131,8 +130,6 @@ export default function SistemaSolicitudes() {
 
   useEffect(() => {
     inicializarAlmacenamiento()
-    // NO cargar solicitudes inválidas automáticamente al iniciar
-    // Solo cargarlas cuando realmente se necesiten mostrar
   }, [])
 
   const inicializarAlmacenamiento = () => {
@@ -152,23 +149,6 @@ export default function SistemaSolicitudes() {
     }
   }
 
-  const cargarUltimaSolicitudInvalida = () => {
-    if (typeof window === 'undefined') return;
-    
-    try {
-      const solicitudesInvalidasStorage = localStorage.getItem(SOLICITUDES_INVALIDAS_KEY)
-      if (solicitudesInvalidasStorage) {
-        const solicitudes = JSON.parse(solicitudesInvalidasStorage)
-        // OBTENER SOLO LA ÚLTIMA SOLICITUD
-        if (solicitudes.length > 0) {
-          setUltimaSolicitudInvalida(solicitudes[solicitudes.length - 1])
-        }
-      }
-    } catch (error) {
-      console.error('Error al cargar última solicitud inválida:', error)
-    }
-  }
-
   const guardarSolicitudInvalida = (solicitud: SolicitudInvalida) => {
     if (typeof window === 'undefined') return;
     
@@ -181,7 +161,6 @@ export default function SistemaSolicitudes() {
       }
       
       localStorage.setItem(SOLICITUDES_INVALIDAS_KEY, JSON.stringify(solicitudesExistentes))
-      // GUARDAR SOLO LA ÚLTIMA SOLICITUD EN EL ESTADO
       setUltimaSolicitudInvalida(solicitud)
       setMostrarSolicitudesInvalidas(true)
     } catch (error) {
@@ -270,7 +249,7 @@ export default function SistemaSolicitudes() {
   }
 
   const calcularFechaEstimadaRespuesta = (fechaRegistro: Date, trabajaSabado: boolean = false): string => {
-    let fecha = new Date(fechaRegistro)
+    const fecha = new Date(fechaRegistro)
     let diasHabiles = 0
     
     while (diasHabiles < 2) {
@@ -470,7 +449,7 @@ export default function SistemaSolicitudes() {
     setRespuestaServidor('')
     setLogsReintentos([])
     setMostrarSolicitudesInvalidas(false)
-    setUltimaSolicitudInvalida(null) // Limpiar también la última solicitud inválida
+    setUltimaSolicitudInvalida(null)
   }
 
   const calcularSimilitud = (str1: string, str2: string): number => {
@@ -486,7 +465,7 @@ export default function SistemaSolicitudes() {
     const s1Len = s1.length;
     const s2Len = s2.length;
 
-    let matrix: number[][] = [];
+    const matrix: number[][] = [];
 
     for (let i = 0; i <= s1Len; i++) {
       matrix[i] = [i];
@@ -677,16 +656,17 @@ export default function SistemaSolicitudes() {
       })
 
       const tiempoRespuesta = Date.now() - inicio
-      const respuesta = await res.text()
+      const _respuesta = await res.text()
       
       if (!res.ok) {
-        throw new Error(`Error ${res.status}: ${respuesta}`)
+        throw new Error(`Error ${res.status}: ${_respuesta}`)
       }
 
-      return { respuesta, tiempoRespuesta }
-    } catch (err: any) {
+      return { respuesta: _respuesta, tiempoRespuesta }
+    } catch (err: unknown) {
       const tiempoRespuesta = Date.now() - inicio
-      throw new Error(`Error al enviar: ${err.message} (Tiempo: ${tiempoRespuesta}ms)`)
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      throw new Error(`Error al enviar: ${errorMessage} (Tiempo: ${tiempoRespuesta}ms)`)
     }
   }
 
@@ -705,7 +685,6 @@ export default function SistemaSolicitudes() {
           agregarLogReintento(1, 0, `⚠️ Número inválido pero se activarán reintentos`)
           throw new Error(`Validación fallida: ${mensajeError}`)
         } else {
-          // GUARDAR SOLICITUD INVÁLIDA
           const solicitudInvalida: SolicitudInvalida = {
             codigoUnico: solicitud.codigoUnico,
             estado: 'solicitud:invalida',
@@ -740,7 +719,7 @@ export default function SistemaSolicitudes() {
       const mensajeConfirmacion = generarMensajeConfirmacion(solicitud)
       
       agregarLogReintento(1, 0, 'Iniciando envío...')
-      const { respuesta, tiempoRespuesta } = await enviarMensajeAPI(mensajeConfirmacion, solicitud.codigoUnico)
+      const { tiempoRespuesta } = await enviarMensajeAPI(mensajeConfirmacion, solicitud.codigoUnico)
       
       agregarLogReintento(1, 0, '✅ ENVÍO EXITOSO', tiempoRespuesta)
       
@@ -751,17 +730,17 @@ export default function SistemaSolicitudes() {
       mostrarMensaje('✅ Solicitud registrada y mensaje enviado exitosamente!', 'success')
       return
       
-    } catch (error: any) {
-      if (error.message.includes('Validación fallida:')) {
-        agregarLogReintento(1, 0, `❌ ERROR VALIDACIÓN: ${error.message}`)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      if (errorMessage.includes('Validación fallida:')) {
+        agregarLogReintento(1, 0, `❌ ERROR VALIDACIÓN: ${errorMessage}`)
       }
-      else if (error.message.includes('400') || error.message.includes('Bad Request')) {
-        const deteccionError = detectarErrorCanalDesdeRespuesta(error.message)
+      else if (errorMessage.includes('400') || errorMessage.includes('Bad Request')) {
+        const deteccionError = detectarErrorCanalDesdeRespuesta(errorMessage)
         
         agregarLogReintento(1, 0, `❌ ERROR 400: ${deteccionError.mensaje}`)
         
         if (!deteccionError.requiereReintentos) {
-          // GUARDAR SOLICITUD INVÁLIDA
           const solicitudInvalida: SolicitudInvalida = {
             codigoUnico: solicitud.codigoUnico,
             estado: 'solicitud:invalida',
@@ -780,7 +759,7 @@ export default function SistemaSolicitudes() {
         
         agregarLogReintento(1, 0, `⚠️ Error 400 pero se reintentará`)
       } else {
-        agregarLogReintento(1, 0, '❌ FALLÓ', undefined, error.message)
+        agregarLogReintento(1, 0, '❌ FALLÓ', undefined, errorMessage)
       }
       
       let intento = 2
@@ -799,7 +778,6 @@ export default function SistemaSolicitudes() {
           if (intento === 2) {
             const validacionReintento = validarCanal(solicitud.numero)
             if (!validacionReintento.valido && !validacionReintento.requiereReintentos) {
-              // GUARDAR SOLICITUD INVÁLIDA
               const solicitudInvalida: SolicitudInvalida = {
                 codigoUnico: solicitud.codigoUnico,
                 estado: 'solicitud:invalida',
@@ -819,16 +797,17 @@ export default function SistemaSolicitudes() {
           }
           
           const mensajeConfirmacion = generarMensajeConfirmacion(solicitud)
-          const { respuesta, tiempoRespuesta } = await enviarMensajeAPI(mensajeConfirmacion, solicitud.codigoUnico + '-reintento-' + (intento - 1))
+          const { tiempoRespuesta: tiempoReintento } = await enviarMensajeAPI(mensajeConfirmacion, solicitud.codigoUnico + '-reintento-' + (intento - 1))
           
-          agregarLogReintento(intento, tiempoEspera, '✅ REINTENTO EXITOSO', tiempoRespuesta)
+          agregarLogReintento(intento, tiempoEspera, '✅ REINTENTO EXITOSO', tiempoReintento)
           
           actualizarUI(solicitud)
           mostrarMensaje('✅ Solicitud registrada y mensaje enviado exitosamente!', 'success')
           return
           
-        } catch (errorRetry: any) {
-          agregarLogReintento(intento, tiempoEspera, `❌ REINTENTO FALLIDO`, undefined, errorRetry.message)
+        } catch (errorRetry: unknown) {
+          const errorRetryMessage = errorRetry instanceof Error ? errorRetry.message : String(errorRetry)
+          agregarLogReintento(intento, tiempoEspera, `❌ REINTENTO FALLIDO`, undefined, errorRetryMessage)
           intento++
         }
       }
@@ -876,8 +855,9 @@ export default function SistemaSolicitudes() {
       
       await enviarMensajes(solicitudRegistrada)
       
-    } catch (error: any) {
-      mostrarMensaje(error.message, 'error')
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      mostrarMensaje(errorMessage, 'error')
     } finally {
       setProcesando(false)
     }
@@ -911,6 +891,7 @@ export default function SistemaSolicitudes() {
 
   return (
     <div className="container" style={{position: 'relative'}}>
+      {/* Botón VOLVER - Posicionado absolutamente para evitar deformaciones */}
       <button
         onClick={goBack}
         className="absolute top-6 left-6 p-3 bg-[#2B3FE0] text-[#2BD0F0] rounded-xl hover:bg-[#1AA7ED] hover:text-white transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 z-10"
@@ -1013,7 +994,6 @@ export default function SistemaSolicitudes() {
         </div>
       )}
 
-      {/* SECCIÓN DE ÚLTIMA SOLICITUD INVÁLIDA - SOLO SE MUESTRA CUANDO mostrarSolicitudesInvalidas ES true */}
       {mostrarSolicitudesInvalidas && ultimaSolicitudInvalida && (
         <div className="glass-card" style={{border: '2px solid #ef4444', background: 'rgba(239, 68, 68, 0.05)', marginTop: '2rem'}}>
           <h2 className="card-title" style={{color: '#ef4444', display: 'flex', alignItems: 'center', gap: '10px'}}>
